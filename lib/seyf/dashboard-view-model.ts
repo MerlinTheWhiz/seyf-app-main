@@ -1,7 +1,7 @@
 import type { InvestmentRun } from "@/lib/seyf/investment-mvp";
 import { listRuns, MOCK_ANNUAL_RATE_PERCENT, getLedgerMeta } from "@/lib/seyf/investment-mvp";
 import { fetchDashboardCetesSaldo, type DashboardCetesSaldo } from "@/lib/seyf/dashboard-cetes-saldo";
-import { getEtherfuseRampContext } from "@/lib/seyf/etherfuse-ramp-context";
+import { resolveEtherfuseRampContext } from "@/lib/seyf/etherfuse-ramp-context";
 import { fetchUserMovements } from "@/lib/seyf/user-movements";
 import {
   DASHBOARD_MOVEMENTS_PREVIEW_LIMIT,
@@ -55,8 +55,13 @@ const DASHBOARD_ETHERFUSE_ORDER_PAGES = 2;
 /**
  * Ensambla números en vivo: saldo CETES×MXN (Etherfuse) y, en dev o con SEYF_ALLOW_MOCK_INVEST, ledger MVP.
  */
-export async function buildDashboardViewModel(): Promise<DashboardViewModel> {
-  const ctx = await getEtherfuseRampContext();
+export async function buildDashboardViewModel(options?: {
+  /** Misma clave Stellar que Pollar; ayuda a resolver órdenes Etherfuse sin cookie en este dispositivo. */
+  walletPublicKeyHint?: string | null;
+}): Promise<DashboardViewModel> {
+  const ctx = await resolveEtherfuseRampContext({
+    walletPublicKeyHint: options?.walletPublicKeyHint ?? null,
+  });
   const [cetesSaldo, investRuns, movementsAll] = await Promise.all([
     fetchDashboardCetesSaldo(ctx),
     investAllowed() ? listRuns(20) : Promise.resolve([] as InvestmentRun[]),
@@ -92,6 +97,9 @@ export async function buildDashboardViewModel(): Promise<DashboardViewModel> {
   if (cetesSaldo.kind === "no_context" && ledgerPrincipal > 0) {
     saldoNote =
       "Saldo según tus depósitos de prueba. Identidad te da el valor en vivo en pesos.";
+  }
+  if (cetesSaldo.kind === "error") {
+    saldoNote = `${saldoNote ?? ""} El carrusel usa tu saldo CETES en la wallet (Pollar); la nota en MXN vía Etherfuse falló.`.trim();
   }
 
   const movementsRecent = movementsAll.slice(0, DASHBOARD_MOVEMENTS_PREVIEW_LIMIT);

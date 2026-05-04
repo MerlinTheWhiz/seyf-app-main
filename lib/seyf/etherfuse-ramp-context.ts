@@ -1,5 +1,10 @@
+import { findRampContextFromOrgWallets } from "@/lib/etherfuse/customer-lookup";
 import { getEtherfuseOnboardingSession } from "@/lib/etherfuse/onboarding-session";
 import { resolveMvpPartnerRampIdentity } from "@/lib/etherfuse/partner-accounts";
+import {
+  isValidStellarPublicKey,
+  normalizeStellarPublicKey,
+} from "@/lib/etherfuse/stellar-public-key";
 import { isEtherfuseDevPanelEnabled } from "@/lib/seyf/etherfuse-dev-panel";
 
 /**
@@ -19,10 +24,17 @@ export type EtherfuseRampContext = {
   customerId: string;
   publicKey: string;
   bankAccountId: string;
-  source: "cookie" | "mvp_env";
+  source: "cookie" | "mvp_env" | "wallet_lookup";
 };
 
-export async function getEtherfuseRampContext(): Promise<EtherfuseRampContext | null> {
+/**
+ * Igual que {@link getEtherfuseRampContext}, pero en producción puede resolver
+ * `customerId` + cuenta bancaria vía GET /ramp/wallets cuando falta la cookie
+ * (p. ej. otro dispositivo) si pasas la misma clave Stellar que en Etherfuse.
+ */
+export async function resolveEtherfuseRampContext(options?: {
+  walletPublicKeyHint?: string | null;
+}): Promise<EtherfuseRampContext | null> {
   const session = await getEtherfuseOnboardingSession();
   if (session) {
     return {
@@ -32,8 +44,26 @@ export async function getEtherfuseRampContext(): Promise<EtherfuseRampContext | 
       source: "cookie",
     };
   }
+
+  const hint = options?.walletPublicKeyHint?.trim();
+  if (hint && isValidStellarPublicKey(normalizeStellarPublicKey(hint))) {
+    const pk = normalizeStellarPublicKey(hint);
+    try {
+      const found = await findRampContextFromOrgWallets(pk);
+      if (found?.customerId && found.bankAccountId) {
+        return {
+          customerId: found.customerId,
+          publicKey: pk,
+          bankAccountId: found.bankAccountId,
+          source: "wallet_lookup",
+        };
+      }
+    } catch {
+      // sin contexto org/wallet
+    }
+  }
+
   if (process.env.NODE_ENV === "production") {
-    // In production we require real onboarding session context only.
     return null;
   }
   if (!isEtherfuseDevPanelEnabled()) {
@@ -50,4 +80,8 @@ export async function getEtherfuseRampContext(): Promise<EtherfuseRampContext | 
   } catch {
     return null;
   }
+}
+
+export async function getEtherfuseRampContext(): Promise<EtherfuseRampContext | null> {
+  return resolveEtherfuseRampContext();
 }

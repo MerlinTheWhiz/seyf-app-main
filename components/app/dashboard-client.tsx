@@ -109,8 +109,13 @@ export default function DashboardClient({
   const [referralDismissCount, setReferralDismissCount] = useState(0)
   const [referralHiddenUntil, setReferralHiddenUntil] = useState(0)
 
+  const dashboardSwrKey =
+    wallet?.stellarAddress?.trim().length === 56 && wallet.stellarAddress.startsWith('G')
+      ? `/api/seyf/dashboard?wallet=${encodeURIComponent(wallet.stellarAddress.trim())}`
+      : '/api/seyf/dashboard'
+
   const { data = vm, error, mutate } = useSWR<DashboardViewModel>(
-    '/api/seyf/dashboard',
+    wallet?.stellarAddress ? dashboardSwrKey : '/api/seyf/dashboard',
     dashboardFetcher,
     {
       fallbackData: vm,
