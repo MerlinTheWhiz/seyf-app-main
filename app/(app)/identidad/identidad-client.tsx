@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import type { EtherfuseKycSnapshot } from '@/lib/etherfuse/kyc'
 import type { EtherfuseOnboardingSession } from '@/lib/etherfuse/onboarding-session'
 import { cn } from '@/lib/utils'
+import { normalizeDateOfBirthToIso } from '@/lib/seyf/normalize-date-of-birth'
 import { isPublicStellarTestnet } from '@/lib/seyf/stellar-wallet-network'
 import { useSeyfWallet } from '@/lib/seyf/use-seyf-wallet'
 import { useEnsureCetesTrustline } from '@/lib/seyf/use-ensure-cetes-trustline'
@@ -400,6 +401,12 @@ export default function IdentidadClient({
         return
       }
 
+      const dateOfBirth = normalizeDateOfBirthToIso(String(fd.get('dateOfBirth') ?? ''))
+      if (!dateOfBirth) {
+        setError('Indica una fecha de nacimiento válida (usa el selector de fecha).')
+        return
+      }
+
       const payload = {
         publicKey: connectedPublicKey,
         identity: {
@@ -410,7 +417,7 @@ export default function IdentidadClient({
             givenName,
             familyName,
           },
-          dateOfBirth: String(fd.get('dateOfBirth') ?? ''),
+          dateOfBirth,
           address: {
             street: String(fd.get('street') ?? ''),
             city: String(fd.get('city') ?? ''),
@@ -535,9 +542,7 @@ export default function IdentidadClient({
         return
       }
 
-      const birthCompactForBank = String(fd.get('dateOfBirth') ?? '')
-        .trim()
-        .replace(/\D/g, '')
+      const birthCompactForBank = dateOfBirth.replace(/-/g, '')
       if (isPublicStellarTestnet() && birthCompactForBank.length === 8) {
         try {
           const ar = await fetch('/api/seyf/etherfuse/bank-account-testnet-auto', {

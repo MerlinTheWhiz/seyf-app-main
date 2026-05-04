@@ -14,6 +14,7 @@ import {
   normalizeStellarPublicKey,
 } from '@/lib/etherfuse/stellar-public-key'
 import { AppError, toErrorResponse } from '@/lib/seyf/api-error'
+import { normalizeDateOfBirthToIso } from '@/lib/seyf/normalize-date-of-birth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -29,7 +30,13 @@ const bodySchema = z.object({
       givenName: z.string().trim().min(1),
       familyName: z.string().trim().min(1),
     }),
-    dateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateOfBirth: z
+      .string()
+      .trim()
+      .refine((s) => normalizeDateOfBirthToIso(s) !== null, {
+        message: 'identity.dateOfBirth must be a valid date (YYYY-MM-DD)',
+      })
+      .transform((s) => normalizeDateOfBirthToIso(s)!),
     address: z.object({
       street: z.string().trim().min(1),
       city: z.string().trim().min(1),
