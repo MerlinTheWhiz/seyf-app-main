@@ -2,7 +2,15 @@
 
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
-import { type FormEvent, useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from 'react'
 import { AppBackLink } from '@/components/app/app-back-link'
 import { AppPageBody } from '@/components/app/app-page-body'
 import { Button } from '@/components/ui/button'
@@ -16,6 +24,15 @@ import { useEnsureCetesTrustline } from '@/lib/seyf/use-ensure-cetes-trustline'
 
 const KYC_PENDING_UI_KEY = 'seyf_kyc_pending_ui'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
+
+/** Tamaño legible para mensajes al usuario (es-MX). */
+function formatFileSizeForUser(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB'
+  const mb = bytes / (1024 * 1024)
+  if (mb >= 1) return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)} MB`
+  const kb = bytes / 1024
+  return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`
+}
 
 async function fileToDataUrl(file: File): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
@@ -36,7 +53,9 @@ function validateImageFile(file: File | null, label: string): string | null {
   if (!file) return `${label} es requerido.`
   const allowed = ['image/jpeg', 'image/png']
   if (!allowed.includes(file.type)) return `${label} debe ser JPG o PNG.`
-  if (file.size > MAX_FILE_BYTES) return `${label} excede 10MB.`
+  if (file.size > MAX_FILE_BYTES) {
+    return `${label}: el archivo pesa ${formatFileSizeForUser(file.size)}; el máximo permitido es ${formatFileSizeForUser(MAX_FILE_BYTES)}.`
+  }
   return null
 }
 
@@ -55,18 +74,49 @@ function KycDocumentPicker({
   selectedFileName: string | null
   onSelect: (file: File | null) => void
 }) {
+  const [pickError, setPickError] = useState<string | null>(null)
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget
+    const file = input.files?.[0] ?? null
+    if (!file) {
+      setPickError(null)
+      onSelect(null)
+      return
+    }
+    const allowed: readonly string[] = ['image/jpeg', 'image/png']
+    if (!allowed.includes(file.type)) {
+      setPickError('Formato no válido. Usa JPG o PNG.')
+      onSelect(null)
+      input.value = ''
+      return
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setPickError(
+        `El archivo pesa ${formatFileSizeForUser(file.size)}; el máximo es ${formatFileSizeForUser(MAX_FILE_BYTES)}.`,
+      )
+      onSelect(null)
+      input.value = ''
+      return
+    }
+    setPickError(null)
+    onSelect(file)
+  }
+
   return (
     <div
       className={cn(
         'rounded-xl border-2 border-dashed px-4 py-4 text-center transition-colors sm:px-5 sm:py-5',
-        selectedFileName
-          ? 'border-[#2d7a5e] bg-[#e8f5ef] dark:border-emerald-500/55 dark:bg-emerald-950/30'
-          : 'border-border bg-secondary/25',
+        pickError
+          ? 'border-destructive/70 bg-destructive/[0.06] dark:border-destructive/60 dark:bg-destructive/[0.08]'
+          : selectedFileName
+            ? 'border-[#2d7a5e] bg-[#e8f5ef] dark:border-emerald-500/55 dark:bg-emerald-950/30'
+            : 'border-border bg-secondary/25',
       )}
     >
       <p className="text-[11px] font-bold leading-snug text-foreground sm:text-xs">{label}</p>
       <p className="mx-auto mt-1.5 max-w-[18rem] text-[10px] leading-snug text-muted-foreground sm:text-[11px]">
-        {hint}
+        {hint} · máx. {formatFileSizeForUser(MAX_FILE_BYTES)}
       </p>
       <div className="mt-3 w-full min-w-0 px-0.5">
         <Input
@@ -80,10 +130,17 @@ function KycDocumentPicker({
             'file:mr-2 file:inline-flex file:shrink-0 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1.5 file:text-[10px] file:font-medium file:leading-tight',
             'sm:file:mr-3 sm:file:px-3 sm:file:text-[11px]',
           )}
-          onChange={(e) => onSelect(e.target.files?.[0] ?? null)}
+          onChange={handleChange}
+          aria-invalid={pickError ? true : undefined}
+          aria-describedby={pickError ? `${name}-file-error` : undefined}
         />
       </div>
-      {selectedFileName ? (
+      {pickError ? (
+        <p id={`${name}-file-error`} className="mt-2 text-[10px] font-medium text-destructive sm:text-[11px]" role="alert">
+          {pickError}
+        </p>
+      ) : null}
+      {selectedFileName && !pickError ? (
         <p className="mt-3 flex items-center justify-center gap-2 text-[11px] font-semibold leading-snug text-[#1f6b4a] dark:text-emerald-300">
           <CheckCircle2 className="size-3.5 shrink-0 sm:size-4" aria-hidden />
           <span className="max-w-full break-all text-left">{selectedFileName}</span>
@@ -971,8 +1028,9 @@ export default function IdentidadClient({
         <section className="rounded-[1.25rem] border border-border bg-card/50 p-4 sm:p-5">
           <p className="text-center text-sm font-bold text-foreground">Documentos KYC</p>
           <p className="mx-auto mt-2 max-w-md text-center text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-            Imágenes claras en JPG o PNG (máx. 10 MB por archivo). Verás confirmación en verde al elegir cada
-            archivo.
+            Imágenes claras en JPG o PNG. Tamaño máximo por imagen: {formatFileSizeForUser(MAX_FILE_BYTES)}. Si lo
+            superas, verás un mensaje en rojo en ese recuadro. Si pesa mucho, comprime la foto en tu teléfono o exporta con
+            menor calidad.
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3 sm:gap-3">
             <KycDocumentPicker
