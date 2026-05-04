@@ -511,7 +511,7 @@ export default function DashboardClient({
               <p className="mt-2 text-xs leading-relaxed text-[#d2e9df]">
                 Creamos una orden onramp de prueba y simulamos el depósito para fondear tu wallet y probar la app.
               </p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4">
                 <Button
                   type="button"
                   onClick={() => void claimWelcomeBonus()}
@@ -523,13 +523,6 @@ export default function DashboardClient({
                     : welcomeBonusClaimed
                       ? 'Bono activado'
                       : 'Activar bono'}
-                </Button>
-                <Button
-                  asChild
-                  variant="secondary"
-                  className="h-10 rounded-full border border-white/20 bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
-                >
-                  <Link href="/anadir">Ver depósito</Link>
                 </Button>
               </div>
               {welcomeBonusMessage ? (

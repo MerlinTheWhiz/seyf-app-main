@@ -105,6 +105,12 @@ export async function POST(req: Request) {
     const existing = await getEtherfuseOnboardingSession()
     const fresh = newEtherfuseOnboardingIds()
     const ids = resolveOnboardingIds(existing, publicKey, fresh)
+    const hasMatchingSession =
+      !!existing &&
+      normalizeStellarPublicKey(existing.publicKey) === publicKey &&
+      !!existing.customerId &&
+      !!existing.bankAccountId
+
     await saveEtherfuseOnboardingSession({
       customerId: ids.customerId,
       bankAccountId: ids.bankAccountId,
@@ -128,28 +134,38 @@ export async function POST(req: Request) {
         throw e
       }
     }
-    // Ensure customer/bank-account context exists in Etherfuse before programmatic KYC submit.
-    let resolved: { customerId: string; bankAccountId: string; presignedUrl: string }
-    try {
-      resolved = await generateOnboardingPresignedUrlResolving409({
-        customerId: ids.customerId,
-        bankAccountId: ids.bankAccountId,
+    /**
+     * Si ya tenemos sesión para esta misma wallet, evitamos pegarle de nuevo a onboarding-url
+     * (llamada propensa a 502 transitorio) y usamos customerId/bankAccountId ya resueltos.
+     */
+    let resolvedCustomerId = ids.customerId
+    let resolvedBankAccountId = ids.bankAccountId
+    if (!hasMatchingSession) {
+      // Ensure customer/bank-account context exists in Etherfuse before programmatic KYC submit.
+      let resolved: { customerId: string; bankAccountId: string; presignedUrl: string }
+      try {
+        resolved = await generateOnboardingPresignedUrlResolving409({
+          customerId: ids.customerId,
+          bankAccountId: ids.bankAccountId,
+          publicKey,
+        })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        const mapped = mapKycProviderSetupError(msg)
+        if (mapped) throw mapped
+        throw e
+      }
+      resolvedCustomerId = resolved.customerId
+      resolvedBankAccountId = resolved.bankAccountId
+      await saveEtherfuseOnboardingSession({
+        customerId: resolvedCustomerId,
+        bankAccountId: resolvedBankAccountId,
         publicKey,
       })
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      const mapped = mapKycProviderSetupError(msg)
-      if (mapped) throw mapped
-      throw e
     }
-    await saveEtherfuseOnboardingSession({
-      customerId: resolved.customerId,
-      bankAccountId: resolved.bankAccountId,
-      publicKey,
-    })
 
     const submission = await submitEtherfuseKycIdentityData({
-      customerId: resolved.customerId,
+      customerId: resolvedCustomerId,
       pubkey: publicKey,
       identity: {
         ...parsed.data.identity,

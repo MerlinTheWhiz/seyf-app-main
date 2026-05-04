@@ -11,11 +11,53 @@ import { etherfuseFetch, etherfuseReadBody } from '@/lib/etherfuse/client'
 import { acceptAllEtherfuseAgreements } from '@/lib/etherfuse/agreements'
 import { generateOnboardingPresignedUrlResolving409 } from '@/lib/etherfuse/onboarding'
 import { upsertStoredAgreementsAccepted } from '@/lib/seyf/agreements-state-store'
+import { fetchOrderDetailsWithRetry, pickRampOrderTransactionDetails } from '@/lib/etherfuse/orders-api'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const WELCOME_BONUS_MXN = 300
+const BONUS_AUTO_CONFIRM_ATTEMPTS = 4
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isOrderEffectivelyFunded(status: string | null): boolean {
+  const s = (status ?? '').toLowerCase()
+  return s === 'funded' || s === 'completed' || s === 'success'
+}
+
+async function autoConfirmSandboxOrder(orderId: string): Promise<{ status: string | null; details: unknown }> {
+  let lastDetails: unknown = null
+  let lastStatus: string | null = null
+
+  for (let attempt = 0; attempt < BONUS_AUTO_CONFIRM_ATTEMPTS; attempt++) {
+    const sim = await etherfuseFetch('/ramp/order/fiat_received', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId }),
+    })
+    const { text: simText } = await etherfuseReadBody(sim)
+    if (!sim.ok) {
+      throw new AppError('provider_unavailable', {
+        statusCode: sim.status >= 400 && sim.status < 600 ? sim.status : 502,
+        retryable: false,
+        message: `Sandbox fiat_received falló: ${simText.slice(0, 500)}`,
+      })
+    }
+
+    lastDetails = await fetchOrderDetailsWithRetry(orderId)
+    const details = pickRampOrderTransactionDetails(lastDetails)
+    lastStatus = details.status
+    if (isOrderEffectivelyFunded(lastStatus)) {
+      return { status: lastStatus, details: lastDetails }
+    }
+    await sleep(700 + attempt * 300)
+  }
+
+  return { status: lastStatus, details: lastDetails }
+}
 
 function ensureTestnet() {
   if (!isPublicStellarTestnet()) {
@@ -133,17 +175,13 @@ export async function POST() {
       }
     }
 
-    const sim = await etherfuseFetch('/ramp/order/fiat_received', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId: ramp.deposit.orderId }),
-    })
-    const { json: simJson, text: simText } = await etherfuseReadBody(sim)
-    if (!sim.ok) {
+    const confirm = await autoConfirmSandboxOrder(ramp.deposit.orderId)
+    if (!isOrderEffectivelyFunded(confirm.status)) {
       throw new AppError('provider_unavailable', {
-        statusCode: sim.status >= 400 && sim.status < 600 ? sim.status : 502,
-        retryable: false,
-        message: `Sandbox fiat_received falló: ${simText.slice(0, 500)}`,
+        statusCode: 502,
+        retryable: true,
+        message:
+          'Sandbox procesó el depósito pero la orden sigue pendiente. Reintenta en unos segundos para terminar auto-confirmación.',
       })
     }
 
@@ -160,7 +198,8 @@ export async function POST() {
         amountMxn: WELCOME_BONUS_MXN,
         orderId: ramp.deposit.orderId,
         depositClabe: ramp.deposit.clabe,
-        fiatReceived: simJson,
+        orderStatus: confirm.status,
+        orderDetails: confirm.details,
       },
       { headers: { 'Cache-Control': 'no-store' } },
     )

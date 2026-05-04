@@ -189,7 +189,7 @@ export type FetchUserMovementsOptions = {
  * Movimientos del usuario: ledger MVP (si aplica) + órdenes GET /ramp/customer/{id}/orders (Etherfuse FX API).
  */
 export async function fetchUserMovements(
-  ctx: EtherfuseRampContext | null,
+  ctx: Pick<EtherfuseRampContext, "customerId"> | null,
   options?: FetchUserMovementsOptions,
 ): Promise<UserMovement[]> {
   const ledgerLimit = options?.ledgerRunsLimit ?? 80;
