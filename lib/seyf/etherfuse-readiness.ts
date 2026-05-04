@@ -3,6 +3,7 @@ import { fetchEtherfuseKycStatus } from '@/lib/etherfuse/kyc'
 import { etherfuseFetch, etherfuseReadBody } from '@/lib/etherfuse/client'
 import { resolveMvpPartnerCryptoWalletId } from '@/lib/etherfuse/partner-accounts'
 import { getStoredAgreementsStatus } from '@/lib/seyf/agreements-state-store'
+import { isPublicStellarTestnet } from '@/lib/seyf/stellar-wallet-network'
 
 type BankAccountRow = {
   bankAccountId?: string
@@ -10,6 +11,55 @@ type BankAccountRow = {
   status?: string
   compliant?: boolean
   deletedAt?: string | null
+}
+
+function isBankRowActiveAndCompliant(row: BankAccountRow): boolean {
+  if (row.deletedAt != null) return false
+  const status = (row.status ?? '').toLowerCase()
+  if (status === 'active') return row.compliant === true
+  // En sandbox/testnet, Etherfuse puede quedarse en awaitingDepositVerification aunque la cuenta ya exista.
+  if (isPublicStellarTestnet() && status === 'awaitingdepositverification') {
+    return row.compliant === true
+  }
+  return false
+}
+
+/**
+ * Prefiere el UUID de sesión si esa cuenta está activa; si no, cualquier cuenta activa+compliant del cliente.
+ * Así recuperamos el estado tras borrar/recrear CLABE en Etherfuse (cookie con id viejo).
+ */
+function pickEffectiveBankAccountRow(
+  items: BankAccountRow[],
+  preferredBankAccountId: string,
+): { row: BankAccountRow | null; id: string | null } {
+  const preferred = items.find((x) => pickBankAccountId(x) === preferredBankAccountId)
+  if (preferred && isBankRowActiveAndCompliant(preferred)) {
+    return { row: preferred, id: pickBankAccountId(preferred) }
+  }
+  const fallback = items.find((x) => isBankRowActiveAndCompliant(x))
+  if (fallback) {
+    return { row: fallback, id: pickBankAccountId(fallback) }
+  }
+  if (preferred) {
+    return { row: preferred, id: pickBankAccountId(preferred) }
+  }
+  return { row: null, id: null }
+}
+
+function mergeBankAccountRows(
+  customerItems: BankAccountRow[],
+  orgItems: BankAccountRow[],
+): BankAccountRow[] {
+  const byId = new Map<string, BankAccountRow>()
+  for (const x of customerItems) {
+    const id = pickBankAccountId(x)
+    if (id) byId.set(id, x)
+  }
+  for (const x of orgItems) {
+    const id = pickBankAccountId(x)
+    if (id && !byId.has(id)) byId.set(id, x)
+  }
+  return [...byId.values()]
 }
 
 export type EtherfuseReadinessInput = {
@@ -32,6 +82,8 @@ export type EtherfuseReadinessResult = {
   documentsUploaded: boolean
   agreementsAccepted: boolean
   bankAccountReady: boolean
+  /** Cuenta bancaria Etherfuse que cumple checks (puede diferir del UUID en cookie). */
+  effectiveBankAccountId: string | null
   trustlineReady: boolean
   webhookConfigured: boolean
   onrampEnabled: boolean
@@ -87,6 +139,7 @@ export async function computeEtherfuseReadiness(
   }
 
   let bankAccountReady = false
+  let effectiveBankAccountId: string | null = ctx.bankAccountId
   try {
     const customerRes = await etherfuseFetch(
       `/ramp/customer/${encodeURIComponent(ctx.customerId)}/bank-accounts`,
@@ -100,18 +153,18 @@ export async function computeEtherfuseReadiness(
       customerRes,
     )
     const customerItems = customerRes.ok ? customerJson?.items ?? [] : []
-    const customerRow = customerItems.find((x) => pickBankAccountId(x) === ctx.bankAccountId)
 
     const orgRes = await etherfuseFetch('/ramp/bank-accounts', { method: 'GET' })
     const { json } = await etherfuseReadBody<{ items?: BankAccountRow[] }>(orgRes)
-    const row = (json?.items ?? []).find((x) => pickBankAccountId(x) === ctx.bankAccountId)
-    const effectiveRow = customerRow ?? row
-    if (effectiveRow) {
-      const status = (effectiveRow.status ?? '').toLowerCase()
-      const active = status === 'active'
-      const compliant = effectiveRow.compliant === true
-      const deleted = effectiveRow.deletedAt != null
-      bankAccountReady = active && compliant && !deleted
+    const orgItems = orgRes.ok ? json?.items ?? [] : []
+
+    const merged = mergeBankAccountRows(customerItems, orgItems)
+    const picked = pickEffectiveBankAccountRow(merged, ctx.bankAccountId)
+    if (picked.row && isBankRowActiveAndCompliant(picked.row)) {
+      bankAccountReady = true
+      if (picked.id) effectiveBankAccountId = picked.id
+    } else {
+      bankAccountReady = false
     }
   } catch (e) {
     if (e instanceof Error) {
@@ -124,7 +177,9 @@ export async function computeEtherfuseReadiness(
   }
 
   const agreementsStatus = await getStoredAgreementsStatus(ctx.customerId, ctx.publicKey)
-  const agreementsAccepted = agreementsStatus?.accepted === true
+  const agreementsAcceptedRaw = agreementsStatus?.accepted === true
+  // En testnet no bloqueamos por estado local de acuerdos (puede perderse por resets).
+  const agreementsAccepted = agreementsAcceptedRaw || isPublicStellarTestnet()
   if (!agreementsAccepted) {
     reasons.push('Falta aceptar los acuerdos legales.')
   }
@@ -174,6 +229,7 @@ export async function computeEtherfuseReadiness(
     documentsUploaded,
     agreementsAccepted,
     bankAccountReady,
+    effectiveBankAccountId,
     trustlineReady,
     webhookConfigured,
     onrampEnabled,

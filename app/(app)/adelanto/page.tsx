@@ -36,6 +36,12 @@ export default function AdelantoPage() {
     reasons: string[]
   } | null>(null)
   const [simulation, setSimulation] = useState<{
+    principal_mxn?: number
+    real_cetes_apy_percent?: number
+    advance_rate_percent?: number
+    years_selected?: number
+    years_max_allowed?: number
+    max_advance_ratio_percent?: number
     max_advance_mxn: number
     fee_mxn: number
     net_to_user_mxn: number
@@ -43,22 +49,43 @@ export default function AdelantoPage() {
     advance_available: boolean
     error?: string
   } | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [advances, setAdvances] = useState<
+    Array<{
+      id: string
+      status: 'pending' | 'completed' | 'failed' | 'liquidated'
+      amount_mxn: number
+      fee_mxn: number
+      net_mxn: number
+      years: number
+      rate_percent: number
+      due_at: string
+      created_at: string
+      liquidated_at: string | null
+      liquidation_fee_mxn: number | null
+      time_left_label: string
+      can_liquidate: boolean
+    }>
+  >([])
+  const [years, setYears] = useState(1)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [simLoading, setSimLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [liquidatingId, setLiquidatingId] = useState<string | null>(null)
   const [exito, setExito] = useState(false)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [uiError, setUiError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
     Promise.all([
-      fetch('/api/seyf/advance/simulate').then((res) => res.json()),
+      fetch(`/api/seyf/advance/simulate?years=${years}`).then((res) => res.json()),
       fetch('/api/seyf/ledger/mxn').then((res) => res.json()),
       fetch('/api/seyf/etherfuse/readiness').then((res) => res.json()),
+      fetch('/api/seyf/advance/list').then((res) => res.json()),
     ])
-      .then(([simData, ledgerData, readinessData]) => {
+      .then(([simData, ledgerData, readinessData, advanceData]) => {
         setSimulation(simData)
         setLedger(ledgerData)
+        setAdvances(Array.isArray(advanceData?.items) ? advanceData.items : [])
         setReadiness({
           onrampEnabled: readinessData?.onrampEnabled === true,
           reasons: Array.isArray(readinessData?.reasons)
@@ -69,14 +96,39 @@ export default function AdelantoPage() {
       .catch(() => {
         setUiError('No pudimos cargar tu información de adelanto.')
       })
-      .finally(() => setLoading(false))
+      .finally(() => setInitialLoading(false))
   }, [])
 
-  const spendableMxn = ledger?.constraints?.mxn_spendable ?? 0
+  useEffect(() => {
+    if (initialLoading) return
+    setSimLoading(true)
+    fetch(`/api/seyf/advance/simulate?years=${years}`)
+      .then((res) => res.json())
+      .then((simData) => {
+        setSimulation(simData)
+      })
+      .catch(() => {
+        setUiError('No pudimos actualizar la simulación.')
+      })
+      .finally(() => setSimLoading(false))
+  }, [years, initialLoading])
+
+  const refreshAdvanceList = async () => {
+    const res = await fetch('/api/seyf/advance/list')
+    const data = await res.json()
+    setAdvances(Array.isArray(data?.items) ? data.items : [])
+  }
+
+  useEffect(() => {
+    if (!simulation?.years_max_allowed) return
+    if (years > simulation.years_max_allowed) {
+      setYears(simulation.years_max_allowed)
+    }
+  }, [simulation?.years_max_allowed, years])
+
   const maxAdvanceBusiness = useMemo(() => {
-    const simulated = simulation?.max_advance_mxn ?? 0
-    return Math.max(0, Math.min(simulated, spendableMxn))
-  }, [simulation?.max_advance_mxn, spendableMxn])
+    return Math.max(0, simulation?.max_advance_mxn ?? 0)
+  }, [simulation?.max_advance_mxn])
 
   const handleConfirmar = async () => {
     if (!simulation) return
@@ -94,12 +146,22 @@ export default function AdelantoPage() {
       const res = await fetch('/api/seyf/advance/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount_mxn: maxAdvanceBusiness }),
+        body: JSON.stringify({ amount_mxn: maxAdvanceBusiness, years }),
       })
-      const data = await res.json()
+      const data = (await res.json().catch(() => ({}))) as {
+        status?: string
+        stellar_tx_hash?: string
+        error?: string
+        message_es?: string
+      }
+      if (!res.ok) {
+        setUiError(data.message_es || data.error || `No pudimos procesar tu adelanto (HTTP ${res.status}).`)
+        return
+      }
       if (data.status === 'completed') {
         setTxHash(data.stellar_tx_hash)
         setExito(true)
+        await refreshAdvanceList()
       } else {
         setUiError(data.error || 'No pudimos procesar tu adelanto.')
       }
@@ -110,23 +172,32 @@ export default function AdelantoPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <AppPageBody className="flex items-center justify-center pt-20">
-        <p className="text-muted-foreground animate-pulse font-medium">Cargando simulación...</p>
-      </AppPageBody>
-    )
+  const handleLiquidar = async (advanceId: string) => {
+    setLiquidatingId(advanceId)
+    setUiError(null)
+    try {
+      const res = await fetch('/api/seyf/advance/liquidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ advance_id: advanceId }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message_es?: string }
+      if (!res.ok || !data.ok) {
+        setUiError(data.message_es || data.error || `No pudimos liquidar (HTTP ${res.status}).`)
+        return
+      }
+      await Promise.all([refreshAdvanceList(), fetch(`/api/seyf/advance/simulate?years=${years}`).then((r) => r.json()).then(setSimulation)])
+    } catch {
+      setUiError('Error de conexión al liquidar adelanto.')
+    } finally {
+      setLiquidatingId(null)
+    }
   }
 
-  if (simulation?.error === 'advance_already_used') {
+  if (initialLoading) {
     return (
-      <AppPageBody className="space-y-6 pt-2">
-        <AppBackLink href="/dashboard" />
-        <section className="rounded-[1.5rem] border border-amber-400/30 bg-amber-900/10 p-6 text-center">
-          <h2 className="text-xl font-bold text-amber-200">Adelanto ya utilizado</h2>
-          <p className="mt-2 text-sm text-amber-100/70">Ya has solicitado un adelanto para este ciclo. Podrás solicitar otro en el siguiente periodo.</p>
-          <Button onClick={() => router.push('/dashboard')} className="mt-6 rounded-full bg-amber-500 hover:bg-amber-600 text-black font-bold">Volver al inicio</Button>
-        </section>
+      <AppPageBody className="flex items-center justify-center pt-20">
+        <p className="text-muted-foreground animate-pulse font-medium">Generando simulación...</p>
       </AppPageBody>
     )
   }
@@ -206,29 +277,61 @@ export default function AdelantoPage() {
     <AppPageBody className="space-y-6 pt-2">
       <AppBackLink href="/dashboard" />
 
-      <section className="relative overflow-hidden rounded-[1.5rem] border border-violet-400/25 bg-gradient-to-br from-violet-700/35 via-indigo-700/25 to-sky-700/15 p-5">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-violet-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-cyan-400/15 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[1.5rem] border border-[#bfd6ca] bg-gradient-to-br from-[#edf6f2] via-[#e6f0ea] to-[#dce9e3] p-5 dark:border-[#2b4a43] dark:bg-gradient-to-br dark:from-[#0d3531] dark:via-[#15534a] dark:to-[#1f6559]">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#9ec7b3]/25 blur-3xl dark:bg-[#6ba690]/25" />
+        <div className="pointer-events-none absolute -bottom-20 -left-12 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
         <div className="relative">
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-violet-100/90">
-            <Sparkles className="size-3 text-violet-200" />
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-[#b8b8b5]/60 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5f7168] dark:border-white/20 dark:bg-white/15 dark:text-[#d2e9df]">
+            <Sparkles className="size-3 text-[#5f7168] dark:text-[#d2e9df]" />
             Adelanto de rendimiento
           </p>
-          <h1 className="mt-2 text-2xl font-black tracking-tight text-white">Obtén liquidez hoy</h1>
-          <p className="mt-2 text-sm text-violet-100/80">
+          <h1 className="mt-2 text-2xl font-black tracking-tight text-[#41534b] dark:text-white">Obtén liquidez hoy</h1>
+          <p className="mt-1.5 text-sm text-[#7b8f86] dark:text-[#d2e9df]">
             Adelanta una parte de tu rendimiento proyectado sin esperar al vencimiento.
-            <span className="block mt-1 font-bold text-white">Tu saldo se mantiene protegido por reglas de bloqueo.</span>
+            <span className="mt-1 block font-bold text-[#41534b] dark:text-white">Tu saldo se mantiene protegido por reglas de bloqueo.</span>
           </p>
         </div>
       </section>
 
       <section className="space-y-4 rounded-[1.5rem] border border-border bg-card p-6 shadow-[0_8px_28px_rgba(0,0,0,0.14)]">
         <div className="grid gap-3 sm:grid-cols-2">
-          <MiniStat label="Saldo disponible" value={formatMXN(spendableMxn)} />
-          <MiniStat label="Saldo bloqueado" value={formatMXN(ledger?.balances?.mxn_blocked ?? 0)} />
+          <MiniStat
+            label="Capital base (MXN)"
+            value={formatMXN(simulation?.principal_mxn ?? (ledger?.constraints?.mxn_spendable ?? 0))}
+          />
+          <MiniStat label="Tope permitido" value={`${(simulation?.max_advance_ratio_percent ?? 90).toFixed(0)}%`} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <MiniStat
+            label="Tasa CETES real (anual)"
+            value={`${(simulation?.real_cetes_apy_percent ?? 0).toFixed(2)}%`}
+          />
+          <MiniStat
+            label="Tasa de adelanto (anual)"
+            value={`${(simulation?.advance_rate_percent ?? 0).toFixed(2)}%`}
+          />
+        </div>
+        <div className="rounded-xl border border-border bg-secondary/40 px-3 py-3">
+          <p className="text-[11px] text-muted-foreground">
+            Años de rendimiento a adelantar (máx. por tope 90%: {simulation?.years_max_allowed ?? 1})
+          </p>
+          <input
+            type="range"
+            min={1}
+            max={simulation?.years_max_allowed ?? 1}
+            step={1}
+            value={Math.min(years, simulation?.years_max_allowed ?? 1)}
+            onChange={(e) => setYears(Number.parseInt(e.target.value, 10) || 1)}
+            className="mt-2 w-full"
+          />
+          <p className="mt-1 text-sm font-bold text-foreground">
+            {years} año(s){simLoading ? ' · actualizando...' : ''}
+          </p>
         </div>
         <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Monto máximo disponible</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Monto máximo disponible (MXN)
+          </p>
           <p className="mt-1 text-3xl font-black tabular-nums tracking-tight text-foreground">
             {formatMXN(maxAdvanceBusiness)}
           </p>
@@ -236,7 +339,7 @@ export default function AdelantoPage() {
 
         <div className="space-y-3 pt-4 border-t border-border">
           <SummaryRow label="Rendimiento neto a recibir" value={formatMXN(Math.max(0, (simulation?.net_to_user_mxn || 0) > 0 ? Math.min(simulation?.net_to_user_mxn || 0, maxAdvanceBusiness) : 0))} bold />
-          <SummaryRow label="Comisión de servicio (flat)" value={formatMXN(simulation?.fee_mxn || 0)} dim />
+          <SummaryRow label="Comisión al liquidar (1.5%)" value={formatMXN(simulation?.fee_mxn || 0)} dim />
           <SummaryRow label="Fecha de liberación ciclo" value={fechaLiberacion} dim />
         </div>
       </section>
@@ -268,8 +371,8 @@ export default function AdelantoPage() {
 
       <div className="bg-secondary/30 rounded-[1.25rem] p-4 border border-border/50">
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          <strong>Nota:</strong> El adelanto se descuenta de tu rendimiento proyectado.
-          Al confirmarlo, ese monto queda reservado hasta la fecha de liquidación.
+          <strong>Nota:</strong> El adelanto usa el rendimiento proyectado como respaldo y el tope de seguridad es
+          90% de tu capital. Al liquidar, se aplica una comisión del 1.5%.
         </p>
       </div>
 
@@ -278,8 +381,41 @@ export default function AdelantoPage() {
         disabled={confirming || !maxAdvanceBusiness || (readiness ? !readiness.onrampEnabled : false)}
         className="h-12 w-full rounded-full bg-foreground text-base font-bold text-background shadow-[0_10px_28px_rgba(255,255,255,0.12)] hover:bg-foreground/90 disabled:opacity-60"
       >
-        {confirming ? 'Confirmando operación…' : 'Confirmar adelanto'}
+        {confirming ? 'Confirmando operación…' : `Confirmar adelanto (${years} año${years === 1 ? '' : 's'})`}
       </Button>
+
+      <section className="space-y-3 rounded-[1.5rem] border border-border bg-card p-5">
+        <h2 className="text-base font-bold text-foreground">Tus adelantos</h2>
+        {advances.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aún no tienes adelantos registrados.</p>
+        ) : (
+          <div className="space-y-2">
+            {advances.map((item) => (
+              <div key={item.id} className="rounded-xl border border-border bg-secondary/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-foreground">{formatMXN(item.amount_mxn)}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{item.status.replace('_', ' ')}</p>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Plazo: {item.years} año(s) · Tasa: {item.rate_percent.toFixed(2)}% · Tiempo restante: {item.time_left_label}
+                </p>
+                {item.can_liquidate ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 rounded-full"
+                    disabled={liquidatingId === item.id}
+                    onClick={() => void handleLiquidar(item.id)}
+                  >
+                    {liquidatingId === item.id ? 'Liquidando...' : 'Liquidar adelanto'}
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <p className="text-center text-[10px] text-muted-foreground">
         Operación sujeta a validaciones de cuenta y disponibilidad.

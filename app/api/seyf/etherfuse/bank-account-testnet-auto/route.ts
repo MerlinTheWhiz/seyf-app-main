@@ -20,8 +20,8 @@ const bodySchema = z.object({
   paternalLastName: z.string().min(1),
   maternalLastName: z.string().min(1),
   birthDate: z.string().regex(/^\d{8}$/, 'birthDate debe ser YYYYMMDD'),
-  curp: z.string().min(10),
-  rfc: z.string().min(10),
+  curp: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{18}$/, 'CURP debe tener 18 caracteres'),
+  rfc: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{13}$/, 'RFC de persona física debe tener 13 caracteres'),
 })
 
 /**
@@ -76,6 +76,7 @@ export async function POST(req: Request) {
           paternalLastName: parsed.data.paternalLastName.trim(),
           maternalLastName: parsed.data.maternalLastName.trim(),
           birthDate: parsed.data.birthDate,
+          birthCountryIsoCode: 'MX',
           curp: parsed.data.curp.trim().toUpperCase(),
           rfc: parsed.data.rfc.trim().toUpperCase(),
           clabe,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { toErrorResponse } from "@/lib/seyf/api-error";
+import { saveEtherfuseOnboardingSession } from "@/lib/etherfuse/onboarding-session";
 import { getEtherfuseRampContext } from "@/lib/seyf/etherfuse-ramp-context";
 import { guardEtherfuseRampRoutes } from "@/lib/seyf/etherfuse-ramp-guard";
 import { computeEtherfuseReadiness } from "@/lib/seyf/etherfuse-readiness";
@@ -22,6 +23,7 @@ export async function GET() {
         kycApproved: false,
         documentsUploaded: false,
         bankAccountReady: false,
+        effectiveBankAccountId: null,
         trustlineReady: false,
         webhookConfigured,
         onrampEnabled: false,
@@ -43,6 +45,18 @@ export async function GET() {
       bankAccountId: ctx.bankAccountId,
       source: ctx.source,
     });
+
+    if (
+      readiness.bankAccountReady &&
+      readiness.effectiveBankAccountId &&
+      readiness.effectiveBankAccountId !== ctx.bankAccountId
+    ) {
+      await saveEtherfuseOnboardingSession({
+        customerId: ctx.customerId,
+        publicKey: ctx.publicKey,
+        bankAccountId: readiness.effectiveBankAccountId,
+      });
+    }
 
     return NextResponse.json(readiness);
   } catch (e) {

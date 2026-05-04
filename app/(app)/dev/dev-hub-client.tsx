@@ -49,6 +49,12 @@ export default function DevHubClient({ showKycReset }: { showKycReset: boolean }
         >
           Backoffice Etherfuse
         </Link>
+        <Link
+          href="/dev/etherfuse-testnet-bank"
+          className="block text-sm font-semibold text-foreground underline-offset-4 hover:underline"
+        >
+          Testnet · CLABE sintética (cuenta sin UI Identidad)
+        </Link>
       </section>
 
       {showKycReset ? <DevKycResetPanel /> : null}

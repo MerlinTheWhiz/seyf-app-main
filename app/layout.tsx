@@ -32,8 +32,10 @@ export default function RootLayout({
   return (
     <html lang="es-MX" suppressHydrationWarning className={inter.variable}>
       <body className="min-h-dvh font-sans antialiased">
-        <PublicMobileHistorySeed />
-        <PollarProviderClient>{children}</PollarProviderClient>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <PublicMobileHistorySeed />
+          <PollarProviderClient>{children}</PollarProviderClient>
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { animate, useMotionValue, useReducedMotion } from 'framer-motion'
-import { ChevronRight, Eye, EyeOff, TrendingUp, Wallet, Zap } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, TrendingUp, Wallet, X, Zap } from 'lucide-react'
 import { useSeyfWallet } from '@/lib/seyf/use-seyf-wallet'
 import { AppPageBody } from '@/components/app/app-page-body'
 import { DashboardHeroCarousel } from '@/components/app/dashboard-hero-carousel'
@@ -26,6 +26,7 @@ import { formatMovementListSubtitle, type UserMovement } from '@/lib/seyf/user-m
 import { formatMXN, formatLoUltimoMonto } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 import type { EtherfuseKycSnapshot } from '@/lib/etherfuse/kyc'
+import { isPublicStellarTestnet } from '@/lib/seyf/stellar-wallet-network'
 
 function formatMontoOculto() {
   return '••••'
@@ -77,6 +78,14 @@ const kycStatusFetcher = (url: string): Promise<EtherfuseKycSnapshot | null> =>
     return body.kyc ?? null
   })
 
+const advanceSimFetcher = (
+  url: string,
+): Promise<{ max_advance_mxn?: number; error?: string; advance_available?: boolean }> =>
+  fetch(url, POLL_FETCH_INIT).then(async (r) => {
+    if (!r.ok) throw new Error(`${r.status}`)
+    return (await r.json()) as { max_advance_mxn?: number; error?: string; advance_available?: boolean }
+  })
+
 export default function DashboardClient({
   vm,
 }: {
@@ -94,6 +103,11 @@ export default function DashboardClient({
     calculatedAt?: string
   }>({ loading: false, annualPercent: null, priceMx: null })
   const [stellarMovements, setStellarMovements] = useState<UserMovement[]>([])
+  const [welcomeBonusBusy, setWelcomeBonusBusy] = useState(false)
+  const [welcomeBonusClaimed, setWelcomeBonusClaimed] = useState(false)
+  const [welcomeBonusMessage, setWelcomeBonusMessage] = useState<string | null>(null)
+  const [referralDismissCount, setReferralDismissCount] = useState(0)
+  const [referralHiddenUntil, setReferralHiddenUntil] = useState(0)
 
   const { data = vm, error, mutate } = useSWR<DashboardViewModel>(
     '/api/seyf/dashboard',
@@ -112,6 +126,16 @@ export default function DashboardClient({
     kycStatusFetcher,
     {
       refreshInterval: 45_000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 2_000,
+    },
+  )
+  const { data: advanceSim } = useSWR<{ max_advance_mxn?: number; error?: string; advance_available?: boolean }>(
+    '/api/seyf/advance/simulate?years=1',
+    advanceSimFetcher,
+    {
+      refreshInterval: 60_000,
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
       dedupingInterval: 2_000,
@@ -136,6 +160,8 @@ export default function DashboardClient({
   }, [mutate])
 
   const activeCycle = data.principalMxn > 0
+  const effectiveAdelantableMxn = Math.max(0, advanceSim?.max_advance_mxn ?? data.adelantableMxn ?? 0)
+  const effectiveAdvanceUsed = advanceSim?.error === 'advance_already_used' ? true : data.advanceUsed
   const kycBadge =
     kycStatus?.status === 'approved' || kycStatus?.status === 'approved_chain_deploying'
       ? {
@@ -164,6 +190,98 @@ export default function DashboardClient({
               href: '/identidad',
               action: 'Verificar ahora',
             }
+
+  useEffect(() => {
+    if (activeCycle) return
+    void fetch('/api/seyf/etherfuse/bonus/welcome', { cache: 'no-store' })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as {
+          claimed?: boolean
+          claim?: { amountMxn?: number }
+        }
+        if (!r.ok) return
+        if (j.claimed) {
+          setWelcomeBonusClaimed(true)
+          setWelcomeBonusMessage(
+            typeof j.claim?.amountMxn === 'number'
+              ? `Bono activado por ${formatMXN(j.claim.amountMxn)} en testnet.`
+              : 'Bono de bienvenida ya activado en testnet.',
+          )
+        }
+      })
+      .catch(() => {
+        // noop
+      })
+  }, [activeCycle])
+
+  useEffect(() => {
+    try {
+      const count = Number.parseInt(window.localStorage.getItem('seyf_referral_dismiss_count') ?? '0', 10)
+      const until = Number.parseInt(window.localStorage.getItem('seyf_referral_hidden_until') ?? '0', 10)
+      if (Number.isFinite(count)) setReferralDismissCount(Math.max(0, count))
+      if (Number.isFinite(until)) setReferralHiddenUntil(Math.max(0, until))
+    } catch {
+      // noop
+    }
+  }, [])
+
+  const claimWelcomeBonus = async () => {
+    setWelcomeBonusBusy(true)
+    setWelcomeBonusMessage(null)
+    try {
+      const r = await fetch('/api/seyf/etherfuse/bonus/welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const j = (await r.json().catch(() => ({}))) as {
+        ok?: boolean
+        alreadyClaimed?: boolean
+        amountMxn?: number
+        error?: { message_es?: string }
+      }
+      if (!r.ok || !j.ok) {
+        setWelcomeBonusMessage(j.error?.message_es ?? `No se pudo activar el bono (HTTP ${r.status}).`)
+        return
+      }
+      setWelcomeBonusClaimed(true)
+      const amount = typeof j.amountMxn === 'number' ? j.amountMxn : 300
+      setWelcomeBonusMessage(
+        j.alreadyClaimed
+          ? 'Bono de bienvenida ya estaba activado para esta cuenta.'
+          : `Bono de bienvenida activado: ${formatMXN(amount)} enviados a tu wallet (sandbox).`,
+      )
+      await mutate()
+      await refreshBalance()
+    } catch {
+      setWelcomeBonusMessage('No se pudo activar el bono en este momento.')
+    } finally {
+      setWelcomeBonusBusy(false)
+    }
+  }
+
+  const dismissReferralCard = () => {
+    const nextCount = referralDismissCount + 1
+    // Se vuelve a mostrar solo: tiempo de ocultación incremental.
+    const hideMinutes = Math.min(10 + nextCount * 5, 60)
+    const until = Date.now() + hideMinutes * 60_000
+    setReferralDismissCount(nextCount)
+    setReferralHiddenUntil(until)
+    try {
+      window.localStorage.setItem('seyf_referral_dismiss_count', String(nextCount))
+      window.localStorage.setItem('seyf_referral_hidden_until', String(until))
+    } catch {
+      // noop
+    }
+  }
+
+  const referralVisible = welcomeBonusClaimed && Date.now() >= referralHiddenUntil
+  const whatsappInviteHref = useMemo(() => {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'https://seyf.mx'
+    const text =
+      `Estoy probando Seyf y ya recibí mi bono de bienvenida. ` +
+      `Únete con mi invitación y recibe 200 CETES al instante: ${base}`
+    return `https://wa.me/?text=${encodeURIComponent(text)}`
+  }, [])
 
   useEffect(() => {
     try {
@@ -257,6 +375,11 @@ export default function DashboardClient({
     () => cetesBalanceEquivMxne(cetesBalance, stablebondCetes.priceMx),
     [cetesBalance, stablebondCetes.priceMx],
   )
+  const testnetWalletTotalMxn = useMemo(() => {
+    const cetes = cetesEquivMxne ?? 0
+    return mxne + cetes
+  }, [mxne, cetesEquivMxne])
+  const principalForHero = isPublicStellarTestnet() ? testnetWalletTotalMxn : mxne
 
   if (loading && !wallet) {
     return (
@@ -343,17 +466,18 @@ export default function DashboardClient({
       <div className="relative">
         <DashboardHeroCarousel
           data={{
-            principal: hideBalances ? 0 : mxne,
-            adelantable: hideBalances ? 0 : data.adelantableMxn,
+            principal: hideBalances ? 0 : principalForHero,
+            adelantable: hideBalances ? 0 : effectiveAdelantableMxn,
             puntos: data.puntos,
             tasaAnual: data.tasaAnual,
-            advanceUsed: data.advanceUsed,
+            advanceUsed: effectiveAdvanceUsed,
             stablebondCetes,
             cetesWallet: {
               balance: hideBalances ? 0 : cetesBalance,
               equivMxne: hideBalances ? null : cetesEquivMxne,
               priceLoading: stablebondCetes.loading,
             },
+            isTestnet: isPublicStellarTestnet(),
           }}
           onIndexChange={setHeroIndex}
         />
@@ -372,28 +496,45 @@ export default function DashboardClient({
         </p>
       ) : null}
 
-      {!activeCycle && (
+      {!activeCycle && !welcomeBonusClaimed && (
         <section className="relative overflow-hidden rounded-[1.65rem] border border-[#c6d9d0] bg-gradient-to-br from-[#0d3531] via-[#15534a] to-[#1f6559] p-5">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" />
           <div className="relative flex items-stretch gap-3">
             <div className="min-w-0 flex-1">
               <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#d8efe5]">
-                Comienza hoy
+                Testnet
               </p>
               <p className="mt-3 text-xl font-black leading-tight tracking-tight text-white">
-                Deposita tu capital
-                <br />
-                para empezar
+                Bono bienvenida
+                <br />300 MXN a CETES
               </p>
               <p className="mt-2 text-xs leading-relaxed text-[#d2e9df]">
-                Activa tu ciclo con tu primer depósito y desbloquea rendimiento y adelantos.
+                Creamos una orden onramp de prueba y simulamos el depósito para fondear tu wallet y probar la app.
               </p>
-              <Button
-                asChild
-                className="mt-4 h-10 rounded-full bg-white px-4 text-sm font-bold text-[#184e46] hover:bg-white/90"
-              >
-                <Link href="/anadir">Depositar ahora</Link>
-              </Button>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  onClick={() => void claimWelcomeBonus()}
+                  disabled={welcomeBonusBusy || welcomeBonusClaimed}
+                  className="h-10 rounded-full bg-white px-4 text-sm font-bold text-[#184e46] hover:bg-white/90 disabled:bg-white/70"
+                >
+                  {welcomeBonusBusy
+                    ? 'Activando...'
+                    : welcomeBonusClaimed
+                      ? 'Bono activado'
+                      : 'Activar bono'}
+                </Button>
+                <Button
+                  asChild
+                  variant="secondary"
+                  className="h-10 rounded-full border border-white/20 bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
+                >
+                  <Link href="/anadir">Ver depósito</Link>
+                </Button>
+              </div>
+              {welcomeBonusMessage ? (
+                <p className="mt-2 text-xs leading-relaxed text-[#d2e9df]">{welcomeBonusMessage}</p>
+              ) : null}
             </div>
             <div className="relative w-[40%] min-w-[7.5rem] overflow-hidden rounded-2xl border border-white/20 bg-white/10">
               <Image
@@ -405,6 +546,39 @@ export default function DashboardClient({
                 priority={false}
               />
             </div>
+          </div>
+        </section>
+      )}
+
+      {referralVisible && (
+        <section className="relative overflow-hidden rounded-[1.65rem] border border-[#c6d9d0] bg-gradient-to-br from-[#123b35] via-[#18584f] to-[#23695c] p-5 text-white">
+          <button
+            type="button"
+            onClick={dismissReferralCard}
+            className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/25 bg-white/10 hover:bg-white/20"
+            aria-label="Cerrar invitación"
+          >
+            <X className="size-4" />
+          </button>
+          <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#d8efe5]">
+            Refiere y gana
+          </p>
+          <p className="mt-3 text-xl font-black leading-tight tracking-tight">
+            Refiere a un amigo y recibe
+            <br />200 CETES al instante
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-[#d2e9df]">
+            Comparte tu invitación por WhatsApp. Cuando entre con tu enlace, activas recompensa.
+          </p>
+          <div className="mt-4">
+            <Button
+              asChild
+              className="h-10 rounded-full bg-white px-4 text-sm font-bold text-[#184e46] hover:bg-white/90"
+            >
+              <a href={whatsappInviteHref} target="_blank" rel="noreferrer">
+                Compartir por WhatsApp
+              </a>
+            </Button>
           </div>
         </section>
       )}
@@ -532,7 +706,7 @@ export default function DashboardClient({
               >
                 <div>
                   <p className="text-sm font-bold text-foreground">
-                    {data.adelantableMxn > 0
+                    {effectiveAdelantableMxn > 0
                       ? 'Adelanto disponible para este ciclo'
                       : 'Aún no tienes adelanto habilitado'}
                   </p>
@@ -551,10 +725,10 @@ export default function DashboardClient({
                   Monto adelantable
                 </p>
                 <p className="mt-1 text-3xl font-black tracking-tight text-foreground dark:text-white">
-                  {hideBalances ? formatMontoOculto() : formatMXN(data.adelantableMxn)}
+                  {hideBalances ? formatMontoOculto() : formatMXN(effectiveAdelantableMxn)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground dark:text-[#d2e9df]">
-                  {data.adelantableMxn > 0
+                  {effectiveAdelantableMxn > 0
                     ? 'Disponible para solicitar ahora.'
                     : 'Completa verificación y ciclo activo para habilitarlo.'}
                 </p>
@@ -580,7 +754,7 @@ export default function DashboardClient({
                     Estado
                   </p>
                   <p className="mt-1 text-sm font-black text-foreground dark:text-white">
-                    {data.adelantableMxn > 0 ? 'Listo para pedir' : 'Bloqueado'}
+                    {effectiveAdelantableMxn > 0 ? 'Listo para pedir' : 'Bloqueado'}
                   </p>
                 </div>
               </div>
@@ -626,7 +800,7 @@ export default function DashboardClient({
               Adelanto disponible
             </div>
             <p className="mt-2 text-3xl font-black tabular-nums tracking-tight text-foreground dark:text-white">
-              {hideBalances ? formatMontoOculto() : formatMXN(data.adelantableMxn)}
+              {hideBalances ? formatMontoOculto() : formatMXN(effectiveAdelantableMxn)}
             </p>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground dark:text-[#d2e9df]">
               Recibe una parte de tu rendimiento hoy, sin retirar tu capital.
@@ -646,7 +820,7 @@ export default function DashboardClient({
                 </div>
               ))}
             </div>
-            {data.adelantableMxn > 0 ? (
+            {effectiveAdelantableMxn > 0 ? (
               <Link href="/adelanto" className="mt-4 block">
                 <Button className="h-12 w-full rounded-full text-base font-black">
                   Pedir adelanto

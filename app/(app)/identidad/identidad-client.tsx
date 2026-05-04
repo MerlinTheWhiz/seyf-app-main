@@ -24,6 +24,8 @@ import { useSeyfWallet } from '@/lib/seyf/use-seyf-wallet'
 import { useEnsureCetesTrustline } from '@/lib/seyf/use-ensure-cetes-trustline'
 
 const KYC_PENDING_UI_KEY = 'seyf_kyc_pending_ui'
+/** Datos del formulario KYC para pre-rellenar el alta CLABE cuando el usuario ya esté aprobado. */
+const KYC_BANK_PREFILL_KEY = 'seyf_kyc_bank_prefill_v1'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 
 /** Tamaño legible para mensajes al usuario (es-MX). */
@@ -231,6 +233,7 @@ export default function IdentidadClient({
   const [bankBusy, setBankBusy] = useState(false)
   const [bankErr, setBankErr] = useState<string | null>(null)
   const [bankOk, setBankOk] = useState<string | null>(null)
+  const [bankPrefillApplied, setBankPrefillApplied] = useState(false)
 
   const approved =
     kycState?.status === 'approved' || kycState?.status === 'approved_chain_deploying'
@@ -271,6 +274,37 @@ export default function IdentidadClient({
     }, 350)
     return () => window.clearTimeout(t)
   }, [approved])
+
+  useEffect(() => {
+    if (!approved || !kycState || bankPrefillApplied) return
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.sessionStorage.getItem(KYC_BANK_PREFILL_KEY)
+      if (!raw) return
+      const p = JSON.parse(raw) as Partial<{
+        givenName: string
+        paternalLastName: string
+        maternalLastName: string
+        dateOfBirth: string
+        curp: string
+        rfc: string
+      }>
+      setBaGiven((v) => v || (typeof p.givenName === 'string' ? p.givenName : '') || '')
+      setBaPaternal((v) => v || (typeof p.paternalLastName === 'string' ? p.paternalLastName : '') || '')
+      setBaMaternal((v) => v || (typeof p.maternalLastName === 'string' ? p.maternalLastName : '') || '')
+      setBaBirth((v) => {
+        if (v) return v
+        const dob = typeof p.dateOfBirth === 'string' ? p.dateOfBirth.trim() : ''
+        const iso = normalizeDateOfBirthToIso(dob)
+        return iso ?? dob
+      })
+      setBaCurp((v) => v || (typeof p.curp === 'string' ? p.curp.toUpperCase() : '') || '')
+      setBaRfc((v) => v || (typeof p.rfc === 'string' ? p.rfc.toUpperCase() : '') || '')
+      setBankPrefillApplied(true)
+    } catch {
+      // noop
+    }
+  }, [approved, kycState, bankPrefillApplied])
 
   const runRefresh = useCallback(
     async (origin: 'submit' | 'button' | 'reset') => {
@@ -314,7 +348,8 @@ export default function IdentidadClient({
       setBankErr('La CLABE debe tener 18 dígitos.')
       return
     }
-    const birthCompact = baBirth.replace(/\D/g, '')
+    const birthIso = normalizeDateOfBirthToIso(baBirth.trim())
+    const birthCompact = birthIso ? birthIso.replace(/-/g, '') : baBirth.replace(/\D/g, '')
     if (birthCompact.length !== 8) {
       setBankErr('Indica una fecha de nacimiento válida.')
       return
@@ -323,8 +358,14 @@ export default function IdentidadClient({
       setBankErr('Nombre y ambos apellidos son obligatorios.')
       return
     }
-    if (baCurp.trim().length < 10 || baRfc.trim().length < 10) {
-      setBankErr('CURP y RFC deben tener al menos 10 caracteres.')
+    const curpNorm = baCurp.trim().toUpperCase()
+    const rfcNorm = baRfc.trim().toUpperCase()
+    if (!/^[A-Z0-9]{18}$/.test(curpNorm)) {
+      setBankErr('La CURP debe tener 18 caracteres.')
+      return
+    }
+    if (!/^[A-Z0-9]{13}$/.test(rfcNorm)) {
+      setBankErr('El RFC de persona física debe tener 13 caracteres.')
       return
     }
     setBankBusy(true)
@@ -339,8 +380,9 @@ export default function IdentidadClient({
             paternalLastName: baPaternal.trim(),
             maternalLastName: baMaternal.trim(),
             birthDate: birthCompact,
-            curp: baCurp.trim().toUpperCase(),
-            rfc: baRfc.trim().toUpperCase(),
+            birthCountryIsoCode: 'MX',
+            curp: curpNorm,
+            rfc: rfcNorm,
             clabe: clabeDigits,
           },
         }),
@@ -363,6 +405,11 @@ export default function IdentidadClient({
       setBankOk(
         'Cuenta registrada. Puede tardar unos minutos en activarse; luego puedes usar Añadir fondos.',
       )
+      try {
+        window.sessionStorage.removeItem(KYC_BANK_PREFILL_KEY)
+      } catch {
+        // noop
+      }
     } catch (err) {
       setBankErr(err instanceof Error ? err.message : 'Error de red.')
     } finally {
@@ -542,6 +589,22 @@ export default function IdentidadClient({
         return
       }
 
+      try {
+        window.sessionStorage.setItem(
+          KYC_BANK_PREFILL_KEY,
+          JSON.stringify({
+            givenName,
+            paternalLastName,
+            maternalLastName,
+            dateOfBirth,
+            curp: curpValue,
+            rfc: rfcValue,
+          }),
+        )
+      } catch {
+        // noop
+      }
+
       const birthCompactForBank = dateOfBirth.replace(/-/g, '')
       if (isPublicStellarTestnet() && birthCompactForBank.length === 8) {
         try {
@@ -558,11 +621,24 @@ export default function IdentidadClient({
             }),
           })
           if (!ar.ok) {
-            const j = await ar.json().catch(() => ({}))
+            const j = (await ar.json().catch(() => ({}))) as {
+              error?: { message_es?: string }
+              debug_message?: string
+            }
             console.warn('[identidad] bank autofill', ar.status, j)
+            const hint =
+              j.error?.message_es ??
+              (typeof j.debug_message === 'string' ? j.debug_message : null) ??
+              'No pudimos crear la cuenta de prueba (CLABE sintética). Revisa SEYF_TESTNET_SYNTHETIC_CLABE y los logs.'
+            setDocUploadError(hint)
           }
         } catch (e) {
           console.warn('[identidad] bank autofill', e)
+          setDocUploadError(
+            e instanceof Error
+              ? e.message
+              : 'No pudimos completar el alta bancaria automática en testnet.',
+          )
         }
       }
 
@@ -691,6 +767,12 @@ export default function IdentidadClient({
           </p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             Si aún no tienes cuenta bancaria con CLABE en México, este paso no aplicará hasta que exista una.
+          </p>
+          <p className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
+            <span className="font-semibold text-foreground">Importante:</span> aceptar los acuerdos legales (en el envío
+            de identidad) <span className="font-semibold text-foreground">no crea</span> tu cuenta CLABE en Etherfuse:
+            hay que registrarla aquí abajo con tus 18 dígitos. Si Pollar te pide firmar una transacción al terminar
+            identidad, suele ser para el activo CETES en Stellar, no para la cuenta bancaria.
           </p>
           <form
             className="mt-4 grid gap-3"

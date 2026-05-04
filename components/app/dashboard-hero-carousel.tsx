@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { animate, motion, useMotionValue, useReducedMotion } from 'framer-motion'
-import { ArrowDownToLine, Clock, Info, Plus, Send } from 'lucide-react'
+import { ArrowDownToLine, Clock, Info, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatMXN, formatPuntos, splitCurrencyForDisplay } from '@/lib/formatters'
@@ -14,6 +14,7 @@ type HeroData = {
   puntos: number
   tasaAnual: number
   advanceUsed?: boolean
+  isTestnet?: boolean
   /** CETES desde Etherfuse /lookup/stablebonds */
   stablebondCetes?: {
     loading: boolean
@@ -33,8 +34,8 @@ const TABS = ['Saldos', 'Adelanto', 'Puntos'] as const
 const SLIDE_COUNT = TABS.length
 
 const saldosQuickActions = [
-  { href: '/depositar', label: 'Depositar', icon: Plus },
-  { href: '/retirar', label: 'Transferir', icon: ArrowDownToLine },
+  { href: '/anadir', label: 'Depositar', icon: ArrowDownToLine },
+  { href: '/retirar', label: 'Transferir', icon: Send },
   { href: '/historial', label: 'Movimientos', icon: Clock },
   { href: '/identidad', label: 'Verificar', icon: Info },
 ] as const
@@ -149,7 +150,9 @@ export function DashboardHeroCarousel({
           onDragEnd={onDragEnd}
         >
           <div className="w-1/3 shrink-0 px-4 pb-4 pt-10 text-center">
-            <p className="text-[13px] font-medium text-muted-foreground">Saldo disponible</p>
+            <p className="text-[13px] font-medium text-muted-foreground">
+              {data.isTestnet ? 'Saldo total estimado (MXN)' : 'Saldo disponible (MXNE)'}
+            </p>
             <div className="mt-1 flex justify-center">
               <p className="inline-flex flex-wrap items-baseline justify-center gap-0.5 leading-none tracking-tight text-foreground">
                 <span className="text-[2.35rem] font-black tabular-nums sm:text-[2.65rem]">{balanceMain}</span>
@@ -215,6 +218,11 @@ export function DashboardHeroCarousel({
                   Valor estimado para consulta. Puede variar.
                 </p>
               </div>
+            ) : null}
+            {cw && cw.balance > 0 && !data.isTestnet ? (
+              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                El saldo disponible en pesos no incluye CETES invertidos.
+              </p>
             ) : null}
 
             <div

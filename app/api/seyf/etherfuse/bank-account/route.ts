@@ -64,6 +64,21 @@ export async function POST(req: Request) {
       })
     }
 
+    const st = kyc.data.status
+    if (st !== 'approved' && st !== 'approved_chain_deploying') {
+      const msg =
+        st === 'proposed'
+          ? 'Tu KYC sigue en revisión. Cuando Etherfuse apruebe tu identidad, podrás registrar tu CLABE.'
+          : st === 'rejected'
+            ? 'Tu verificación fue rechazada. Actualiza tu información de identidad antes de registrar una cuenta bancaria.'
+            : 'Tu identidad aún no está lista para vincular CLABE. Completa o espera la verificación en Identidad.'
+      throw new AppError('validation_error', {
+        statusCode: 409,
+        retryable: false,
+        message: msg,
+      })
+    }
+
     const raw = (await req.json().catch(() => null)) as unknown
     const parsed = bodySchema.safeParse(raw)
     if (!parsed.success) {
