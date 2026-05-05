@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { AppError, toErrorResponse } from '@/lib/seyf/api-error'
 import { guardEtherfuseRampRoutes } from '@/lib/seyf/etherfuse-ramp-guard'
 import { resolveEtherfuseRampContext } from '@/lib/seyf/etherfuse-ramp-context'
+import { rateLimitResponse } from '@/lib/seyf/redis-guards'
 import { isPublicStellarTestnet } from '@/lib/seyf/stellar-wallet-network'
 import { getWelcomeBonusClaimByCustomerId, upsertWelcomeBonusClaim } from '@/lib/seyf/welcome-bonus-store'
 import { assertEtherfuseKycApproved } from '@/lib/seyf/etherfuse-kyc-guard'
@@ -116,6 +117,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const denied = guardEtherfuseRampRoutes()
   if (denied) return denied
+  // 3 intentos por IP cada 60s — previene spam del bono
+  const limited = await rateLimitResponse(request, 'bonus/welcome', { limit: 3, windowSec: 60 })
+  if (limited) return limited
   try {
     ensureTestnet()
 

@@ -17,6 +17,7 @@ import {
   normalizeStellarPublicKey,
 } from '@/lib/etherfuse/stellar-public-key'
 import { AppError, toErrorResponse } from '@/lib/seyf/api-error'
+import { rateLimitResponse } from '@/lib/seyf/redis-guards'
 import { normalizeDateOfBirthToIso } from '@/lib/seyf/normalize-date-of-birth'
 
 export const dynamic = 'force-dynamic'
@@ -82,6 +83,9 @@ function mapKycProviderSetupError(message: string): AppError | null {
 }
 
 export async function POST(req: Request) {
+  // 5 intentos por IP cada 10 minutos — evita fuerza bruta en KYC
+  const limited = await rateLimitResponse(req, 'kyc/submit', { limit: 5, windowSec: 600 })
+  if (limited) return limited
   try {
     const raw = (await req.json().catch(() => null)) as unknown
     const parsed = bodySchema.safeParse(raw)

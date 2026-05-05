@@ -9,6 +9,7 @@ import { upsertStoredAgreementsAccepted } from "@/lib/seyf/agreements-state-stor
 import { assertEtherfuseKycApproved } from "@/lib/seyf/etherfuse-kyc-guard";
 import { getEtherfuseRampContext } from "@/lib/seyf/etherfuse-ramp-context";
 import { guardEtherfuseRampRoutes } from "@/lib/seyf/etherfuse-ramp-guard";
+import { acquireOnrampLock, releaseOnrampLock } from "@/lib/seyf/redis-guards";
 
 const bodySchema = z.object({
   quoteId: z.string().uuid(),
@@ -64,6 +65,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Distributed lock — prevents concurrent onramp orders for the same customer
+  const locked = await acquireOnrampLock(ctx.customerId);
+  if (!locked) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "conflict",
+          message_es: "Ya hay una orden en proceso. Espera unos segundos e intenta de nuevo.",
+          retryable: true,
+        },
+      },
+      { status: 409 },
+    );
+  }
   try {
     await assertEtherfuseKycApproved({
       customerId: ctx.customerId,
@@ -105,5 +120,7 @@ export async function POST(req: Request) {
       );
     }
     return toErrorResponse(e, "order/onramp");
+  } finally {
+    await releaseOnrampLock(ctx.customerId);
   }
 }
