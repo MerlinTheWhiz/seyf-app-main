@@ -31,12 +31,44 @@ export type EtherfuseRampContext = {
  * Igual que {@link getEtherfuseRampContext}, pero en producción puede resolver
  * `customerId` + cuenta bancaria vía GET /ramp/wallets cuando falta la cookie
  * (p. ej. otro dispositivo) si pasas la misma clave Stellar que en Etherfuse.
+ *
+ * Auto-healing de cookies obsoletas: si el cookie tiene un customerId que ya no
+ * corresponde al cliente real de esa wallet (p. ej. porque se guardó el org ID
+ * por un bug previo), el wallet lookup lo corrige cuando se provee walletPublicKeyHint.
  */
 export async function resolveEtherfuseRampContext(options?: {
   walletPublicKeyHint?: string | null;
 }): Promise<EtherfuseRampContext | null> {
   const session = await getEtherfuseOnboardingSession();
+
+  const hint = options?.walletPublicKeyHint?.trim();
+  const hintPk =
+    hint && isValidStellarPublicKey(normalizeStellarPublicKey(hint))
+      ? normalizeStellarPublicKey(hint)
+      : null;
+
+  // When we have both a session cookie AND a wallet hint for the same public key,
+  // verify the cookie's customerId via wallet lookup to catch stale cookies
+  // (e.g. org ID stored by a previous bug). Prefer the lookup result if they differ.
   if (session) {
+    if (hintPk && normalizeStellarPublicKey(session.publicKey) === hintPk) {
+      try {
+        const found = await findRampContextFromOrgWallets(hintPk);
+        if (found?.customerId && found.bankAccountId) {
+          if (found.customerId !== session.customerId) {
+            // Cookie has a stale/wrong customerId — use the real one from API
+            return {
+              customerId: found.customerId,
+              publicKey: hintPk,
+              bankAccountId: found.bankAccountId,
+              source: "wallet_lookup",
+            };
+          }
+        }
+      } catch {
+        // Lookup failed, fall through to cookie as-is
+      }
+    }
     return {
       customerId: session.customerId,
       publicKey: session.publicKey,
@@ -45,15 +77,13 @@ export async function resolveEtherfuseRampContext(options?: {
     };
   }
 
-  const hint = options?.walletPublicKeyHint?.trim();
-  if (hint && isValidStellarPublicKey(normalizeStellarPublicKey(hint))) {
-    const pk = normalizeStellarPublicKey(hint);
+  if (hintPk) {
     try {
-      const found = await findRampContextFromOrgWallets(pk);
+      const found = await findRampContextFromOrgWallets(hintPk);
       if (found?.customerId && found.bankAccountId) {
         return {
           customerId: found.customerId,
-          publicKey: pk,
+          publicKey: hintPk,
           bankAccountId: found.bankAccountId,
           source: "wallet_lookup",
         };
