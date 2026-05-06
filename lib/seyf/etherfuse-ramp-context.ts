@@ -54,23 +54,19 @@ export async function resolveEtherfuseRampContext(options?: {
     if (hintPk && normalizeStellarPublicKey(session.publicKey) === hintPk) {
       try {
         const found = await findRampContextFromOrgWallets(hintPk);
-        if (found?.customerId && found.bankAccountId) {
-          if (found.customerId !== session.customerId) {
-            // Cookie has a stale/wrong customerId — use the real one from API
-            return {
-              customerId: found.customerId,
-              publicKey: hintPk,
-              bankAccountId: found.bankAccountId,
-              source: "wallet_lookup",
-            };
-          }
-          // IDs match — cookie is valid, fall through to return it
-        } else {
-          // Wallet exists in Etherfuse but has no customer in the current org.
-          // The cookie is likely stale (from a previous org). Return null so the
-          // caller knows the user must re-complete /identidad in the current org.
-          return null;
+        if (found?.customerId && found.bankAccountId && found.customerId !== session.customerId) {
+          // Lookup found a DIFFERENT customerId → cookie is stale, use the real one
+          return {
+            customerId: found.customerId,
+            publicKey: hintPk,
+            bankAccountId: found.bankAccountId,
+            source: "wallet_lookup",
+          };
         }
+        // Lookup returned null or same customerId → trust the cookie.
+        // Null can happen when the customer was just created (not yet indexed)
+        // or when the org wallet endpoint is temporarily unavailable.
+        // Downstream calls will surface "Organization not found" if truly stale.
       } catch {
         // Lookup failed (network error) — fall through to cookie as-is
       }
