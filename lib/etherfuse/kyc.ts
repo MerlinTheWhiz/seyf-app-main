@@ -203,11 +203,13 @@ export async function submitEtherfuseKycIdentityData(params: {
     );
   }
   const statusRaw = json.status;
-  if (typeof statusRaw !== "string" || !isKycStatus(statusRaw)) {
-    throw new Error(`Etherfuse KYC submit devolvió status inválido: ${text.slice(0, 400)}`);
-  }
+  // Normalize unknown statuses (e.g. "compliant") to "proposed" — submit was accepted
+  const status: EtherfuseKycStatus =
+    typeof statusRaw === "string" && isKycStatus(statusRaw)
+      ? statusRaw
+      : "proposed";
   return {
-    status: statusRaw,
+    status,
     message: typeof json.message === "string" ? json.message : null,
   };
 }
@@ -245,11 +247,12 @@ export async function uploadEtherfuseKycDocuments(params: {
     );
   }
   const statusRaw = json.status;
-  if (typeof statusRaw !== "string" || !isKycStatus(statusRaw)) {
-    throw new Error(`Etherfuse KYC documents devolvió status inválido: ${text.slice(0, 400)}`);
-  }
+  const status: EtherfuseKycStatus =
+    typeof statusRaw === "string" && isKycStatus(statusRaw)
+      ? statusRaw
+      : "proposed";
   return {
-    status: statusRaw,
+    status,
     message: typeof json.message === "string" ? json.message : null,
   };
 }
