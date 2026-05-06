@@ -3,7 +3,8 @@ import {
   fetchOrgOrdersAllPages,
   pickRampOrderTransactionDetails,
 } from "@/lib/etherfuse/orders-api";
-import { resolveMvpPartnerCryptoWalletId } from "@/lib/etherfuse/partner-accounts";
+import { etherfuseFetch, etherfuseReadBody } from "@/lib/etherfuse/client";
+import { normalizeStellarPublicKey } from "@/lib/etherfuse/stellar-public-key";
 import type { InvestmentRun } from "@/lib/seyf/investment-mvp";
 import { listRuns } from "@/lib/seyf/investment-mvp";
 import type { EtherfuseRampContext } from "@/lib/seyf/etherfuse-ramp-context";
@@ -22,6 +23,33 @@ export {
   formatMovementFechaHora,
   formatMovementListSubtitle,
 } from "@/lib/seyf/user-movements-types";
+
+/**
+ * Busca el walletId de Etherfuse directamente desde /ramp/wallets por publicKey.
+ * No usa variables de entorno MVP para evitar retornar un walletId hardcodeado
+ * que no corresponda a la wallet actual del usuario.
+ */
+async function resolveWalletIdByPublicKey(stellarPublicKey: string): Promise<string | null> {
+  try {
+    const res = await etherfuseFetch("/ramp/wallets", { method: "GET" });
+    const { json } = await etherfuseReadBody<{ items?: Record<string, unknown>[] }>(res);
+    if (!res.ok) return null;
+    const target = normalizeStellarPublicKey(stellarPublicKey);
+    for (const row of json?.items ?? []) {
+      const pk = typeof row.publicKey === "string" ? row.publicKey : typeof row.public_key === "string" ? row.public_key : null;
+      if (!pk) continue;
+      const bc = String(typeof row.blockchain === "string" ? row.blockchain : "").toLowerCase();
+      if (bc && bc !== "stellar") continue;
+      if (normalizeStellarPublicKey(pk) === target) {
+        const wid = typeof row.walletId === "string" ? row.walletId : typeof row.wallet_id === "string" ? row.wallet_id : null;
+        return wid;
+      }
+    }
+  } catch {
+    // red no disponible
+  }
+  return null;
+}
 
 function investAllowed(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
@@ -224,13 +252,8 @@ export async function fetchUserMovements(
       if (rows.length === 0) {
         const orgRows = await fetchOrgOrdersAllPages(etherfusePages ?? 20);
         if (walletPublicKey && orgRows.length > 0) {
-          // Resolver el walletId de este usuario para filtrar sólo sus órdenes
-          let userWalletId: string | null = null;
-          try {
-            userWalletId = await resolveMvpPartnerCryptoWalletId(walletPublicKey);
-          } catch {
-            // Si no se puede resolver el walletId, mostrar todas las órdenes de la org
-          }
+          // Resolver el walletId real para este publicKey (sin usar env vars hardcodeadas)
+          const userWalletId = await resolveWalletIdByPublicKey(walletPublicKey);
           rows = userWalletId
             ? orgRows.filter((r) => {
                 const wid = typeof r.walletId === "string" ? r.walletId : typeof r.wallet_id === "string" ? r.wallet_id : null;
