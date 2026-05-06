@@ -13,58 +13,86 @@ import { etherfuseFetch, etherfuseReadBody } from '@/lib/etherfuse/client'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 type BankAccountRow = {
   bankAccountId?: string
   etherfuseDepositClabe?: string | null
   status?: string
+  deletedAt?: string | null
 }
 type BankAccountsList = { items?: BankAccountRow[] }
 
+/**
+ * Busca cuenta bancaria activa: primero intenta con el endpoint de customer,
+ * luego con el endpoint de org (/ramp/bank-accounts) como fallback
+ * (en sandbox, la cuenta puede estar registrada a nivel de org).
+ */
 async function findExistingBankAccount(
   customerId: string,
   bankAccountId: string,
 ): Promise<{ etherfuseDepositClabe: string | null; bankAccountId: string } | null> {
-  const res = await etherfuseFetch(
-    `/ramp/customer/${encodeURIComponent(customerId)}/bank-accounts`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageSize: 50, pageNumber: 0 }),
-    },
-  )
-  const { json } = await etherfuseReadBody<BankAccountsList>(res)
-  if (!res.ok || !json?.items?.length) return null
-  const match = json.items.find((b) => b.bankAccountId === bankAccountId) ?? json.items[0]
-  if (!match?.bankAccountId) return null
-  return {
-    bankAccountId: match.bankAccountId,
-    etherfuseDepositClabe: match.etherfuseDepositClabe ?? null,
-  }
+  // Intento 1: endpoint de customer
+  try {
+    const res = await etherfuseFetch(
+      `/ramp/customer/${encodeURIComponent(customerId)}/bank-accounts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageSize: 50, pageNumber: 0 }),
+      },
+    )
+    const { json } = await etherfuseReadBody<BankAccountsList>(res)
+    if (res.ok && json?.items?.length) {
+      const active = json.items.filter((b) => !b.deletedAt)
+      const match = active.find((b) => b.bankAccountId === bankAccountId) ?? active[0]
+      if (match?.bankAccountId) {
+        return {
+          bankAccountId: match.bankAccountId,
+          etherfuseDepositClabe: match.etherfuseDepositClabe ?? null,
+        }
+      }
+    }
+  } catch { /* continuar al fallback */ }
+
+  // Intento 2: endpoint de org (sandbox: cuentas registradas al nivel de organización)
+  try {
+    const res = await etherfuseFetch('/ramp/bank-accounts', { method: 'GET' })
+    const { json } = await etherfuseReadBody<BankAccountsList>(res)
+    if (res.ok && json?.items?.length) {
+      const active = json.items.filter((b) => !b.deletedAt && b.status !== 'deleted')
+      const match = active.find((b) => b.bankAccountId === bankAccountId) ?? active[0]
+      if (match?.bankAccountId) {
+        return {
+          bankAccountId: match.bankAccountId,
+          etherfuseDepositClabe: match.etherfuseDepositClabe ?? null,
+        }
+      }
+    }
+  } catch { /* sin cuenta */ }
+
+  return null
 }
 
 /**
  * POST /api/seyf/etherfuse/activate-deposit-clabe
  * Body: { wallet: string }
  *
- * En testnet: crea la cuenta bancaria en Etherfuse con la CLABE sintética
- * usando datos dummy (solo sandbox). Actualiza sesión con el bankAccountId real.
- *
- * Si ya existe una cuenta bancaria, la retorna directamente.
+ * En testnet: devuelve la cuenta bancaria existente o crea una nueva con
+ * la CLABE sintética (solo sandbox). Actualiza sesión con el bankAccountId real.
  */
 export async function POST(request: Request) {
   const denied = guardEtherfuseRampRoutes()
   if (denied) return denied
 
-  if (!isPublicStellarTestnet()) {
-    throw new AppError('validation_error', {
-      statusCode: 403,
-      retryable: false,
-      message: 'La activación automática solo está disponible en testnet.',
-    })
-  }
-
   try {
+    if (!isPublicStellarTestnet()) {
+      throw new AppError('validation_error', {
+        statusCode: 403,
+        retryable: false,
+        message: 'La activación automática solo está disponible en testnet.',
+      })
+    }
     let walletHint: string | null = null
     try {
       const body = (await request.json()) as Record<string, unknown>
