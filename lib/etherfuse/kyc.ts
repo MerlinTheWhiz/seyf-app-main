@@ -43,6 +43,7 @@ export type EtherfuseKycSubmitIdentity = {
   email?: string;
   phoneNumber?: string;
   occupation?: string;
+  accountType?: string;
   name: { givenName: string; familyName: string };
   dateOfBirth: string;
   address: {
@@ -180,7 +181,10 @@ export async function submitEtherfuseKycIdentityData(params: {
   const body = {
     ...(params.pubkey ? { pubkey: params.pubkey } : {}),
     accountType: params.accountType ?? 'personal',
-    identity: params.identity,
+    identity: {
+      accountType: params.accountType ?? 'personal',
+      ...params.identity,
+    },
   };
   const res = await etherfuseFetch(path, {
     method: "POST",
