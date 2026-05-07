@@ -320,10 +320,10 @@ export default function EtherfuseRampDevClient() {
   const showDepositProgress = Boolean(speiDetails || fiatJson || onrampTxSignature)
 
   return (
-    <AppPageBody className="space-y-6 pt-4">
+    <AppPageBody className="space-y-6 px-4 pt-3 sm:px-6 sm:pt-4">
       <AppBackLink href="/dashboard" />
 
-      <section className="relative overflow-hidden rounded-[1.5rem] border border-[#bfd6ca] bg-gradient-to-br from-[#edf6f2] via-[#e6f0ea] to-[#dce9e3] p-5 dark:border-[#2b4a43] dark:bg-gradient-to-br dark:from-[#0d3531] dark:via-[#15534a] dark:to-[#1f6559]">
+      <section className="relative overflow-hidden rounded-[1.5rem] border border-[#bfd6ca] bg-gradient-to-br from-[#edf6f2] via-[#e6f0ea] to-[#dce9e3] p-4 dark:border-[#2b4a43] dark:bg-gradient-to-br dark:from-[#0d3531] dark:via-[#15534a] dark:to-[#1f6559] sm:p-5">
         <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#9ec7b3]/25 blur-3xl dark:bg-[#6ba690]/25" />
         <div className="pointer-events-none absolute -bottom-20 -left-12 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
         <div className="relative">
@@ -332,7 +332,9 @@ export default function EtherfuseRampDevClient() {
             Depósito SPEI
             </p>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-[#41534b] dark:text-white">Añadir fondos</h1>
+          <h1 className="text-xl font-black tracking-tight text-[#41534b] dark:text-white sm:text-2xl">
+            Añadir fondos
+          </h1>
           <p className="mt-1.5 text-sm text-[#7b8f86] dark:text-[#d2e9df]">
             Depósito por SPEI: mismo uso que transferir a una cuenta CLABE desde tu banco.
           </p>
@@ -371,7 +373,7 @@ export default function EtherfuseRampDevClient() {
       ) : null}
 
       {canOperate ? (
-        <section className="space-y-3 rounded-[1.5rem] border border-[#bfd6ca] bg-[#f4faf7] p-5 dark:border-border dark:bg-card/80">
+        <section className="space-y-3 rounded-[1.5rem] border border-[#bfd6ca] bg-[#f4faf7] p-4 dark:border-border dark:bg-card/80 sm:p-5">
           <div>
             <h2 className="text-base font-bold text-foreground">¿Cuánto vas a depositar?</h2>
             <p className="mt-1 text-xs text-muted-foreground">

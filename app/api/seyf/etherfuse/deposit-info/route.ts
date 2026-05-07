@@ -15,6 +15,7 @@ type BankAccountRow = {
   abbrClabe?: string
   label?: string | null
   compliant?: boolean
+  deletedAt?: string | null
 }
 type BankAccountsList = { items?: BankAccountRow[] }
 
@@ -22,6 +23,17 @@ async function fetchBankAccountDepositClabe(
   customerId: string,
   bankAccountId: string,
 ): Promise<{ etherfuseDepositClabe: string | null; status: string | null }> {
+  const pickFromItems = (
+    items: BankAccountRow[],
+  ): { etherfuseDepositClabe: string | null; status: string | null } => {
+    const active = items.filter((b) => !b.deletedAt)
+    const match = active.find((b) => b.bankAccountId === bankAccountId) ?? active[0]
+    return {
+      etherfuseDepositClabe: match?.etherfuseDepositClabe ?? null,
+      status: match?.status ?? null,
+    }
+  }
+
   const res = await etherfuseFetch(
     `/ramp/customer/${encodeURIComponent(customerId)}/bank-accounts`,
     {
@@ -31,16 +43,25 @@ async function fetchBankAccountDepositClabe(
     },
   )
   const { json } = await etherfuseReadBody<BankAccountsList>(res)
-  if (!res.ok || !json?.items) return { etherfuseDepositClabe: null, status: null }
-
-  // Buscar el bankAccountId de la sesión
-  const match = json.items.find((b) => b.bankAccountId === bankAccountId)
-  const first = match ?? json.items[0]
-
-  return {
-    etherfuseDepositClabe: first?.etherfuseDepositClabe ?? null,
-    status: first?.status ?? null,
+  if (res.ok && json?.items?.length) {
+    const fromCustomer = pickFromItems(json.items)
+    if (fromCustomer.etherfuseDepositClabe || fromCustomer.status) {
+      return fromCustomer
+    }
   }
+
+  // Sandbox: cuenta a nivel org — mismo fallback que activate-deposit-clabe
+  try {
+    const orgRes = await etherfuseFetch('/ramp/bank-accounts', { method: 'GET' })
+    const { json: orgJson } = await etherfuseReadBody<BankAccountsList>(orgRes)
+    if (orgRes.ok && orgJson?.items?.length) {
+      return pickFromItems(orgJson.items)
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return { etherfuseDepositClabe: null, status: null }
 }
 
 /**
