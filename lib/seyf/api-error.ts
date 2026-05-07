@@ -102,11 +102,15 @@ export function toErrorResponse(
 
   if (e instanceof AppError) {
     console.error(tag, e.code, e.message);
+    const messageEs =
+      e.messageEs ??
+      (e.code === "validation_error" ? e.message : null) ??
+      MESSAGE_ES[e.code];
     return NextResponse.json(
       {
         error: {
           code: e.code,
-          message_es: e.messageEs ?? MESSAGE_ES[e.code],
+          message_es: messageEs,
           retryable: e.retryable,
         },
       },

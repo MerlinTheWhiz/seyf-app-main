@@ -196,9 +196,15 @@ export default function DashboardClient({
               action: 'Verificar ahora',
             }
 
+  const lastBonusWalletKeyRef = useRef<string>('')
   useEffect(() => {
     if (activeCycle) return
     const addr = wallet?.stellarAddress?.trim() ?? ''
+    const walletKey = addr || '(none)'
+    if (lastBonusWalletKeyRef.current !== walletKey) {
+      lastBonusWalletKeyRef.current = walletKey
+      setWelcomeBonusMessage(null)
+    }
     const bonusUrl = addr
       ? `/api/seyf/etherfuse/bonus/welcome?wallet=${encodeURIComponent(addr)}`
       : '/api/seyf/etherfuse/bonus/welcome'
@@ -208,9 +214,13 @@ export default function DashboardClient({
           claimed?: boolean
           claim?: { amountMxn?: number }
         }
-        if (!r.ok) return
-        if (j.claimed) {
-          setWelcomeBonusClaimed(true)
+        if (!r.ok) {
+          setWelcomeBonusClaimed(false)
+          return
+        }
+        const claimed = Boolean(j.claimed)
+        setWelcomeBonusClaimed(claimed)
+        if (claimed) {
           setWelcomeBonusMessage(
             typeof j.claim?.amountMxn === 'number'
               ? `Bono activado por ${formatMXN(j.claim.amountMxn)} en testnet.`
@@ -219,7 +229,7 @@ export default function DashboardClient({
         }
       })
       .catch(() => {
-        // noop
+        setWelcomeBonusClaimed(false)
       })
   }, [activeCycle, wallet?.stellarAddress])
 
@@ -252,10 +262,25 @@ export default function DashboardClient({
         ok?: boolean
         alreadyClaimed?: boolean
         amountMxn?: number
-        error?: { message_es?: string }
+        error?: { message_es?: string; code?: string }
+        debug_message?: string
       }
       if (!r.ok || !j.ok) {
-        setWelcomeBonusMessage(j.error?.message_es ?? `No se pudo activar el bono (HTTP ${r.status}).`)
+        setWelcomeBonusMessage(
+          j.error?.message_es ??
+            (typeof j.debug_message === 'string' ? j.debug_message : null) ??
+            `No se pudo activar el bono (HTTP ${r.status}).`,
+        )
+        try {
+          const sync = await fetch(
+            `/api/seyf/etherfuse/bonus/welcome?wallet=${encodeURIComponent(addr)}`,
+            { cache: 'no-store' },
+          )
+          const sj = (await sync.json().catch(() => ({}))) as { claimed?: boolean }
+          if (sync.ok) setWelcomeBonusClaimed(Boolean(sj.claimed))
+        } catch {
+          setWelcomeBonusClaimed(false)
+        }
         return
       }
       setWelcomeBonusClaimed(true)
