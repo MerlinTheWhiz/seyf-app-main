@@ -1,8 +1,8 @@
 import {
-  createMxOnrampOrder,
   createMxOnrampQuote,
   fetchRampableAssetsForWallet,
   pickOnrampTargetIdentifier,
+  createMxOnrampOrderStellarResilient,
 } from "./ramp-api";
 import {
   type MvpPartnerRampIdentity,
@@ -170,10 +170,10 @@ export async function executeMvpPartnerOnramp(params: {
 
   let orderJson: unknown;
   try {
-    // Solo cryptoWalletId: con publicKey a veces Etherfuse responde "Proxy account not found" aunque el UUID exista.
-    orderJson = await createMxOnrampOrder({
+    orderJson = await createMxOnrampOrderStellarResilient({
       bankAccountId: identity.bankAccountId,
       quoteId,
+      publicKey: identity.publicKey,
       cryptoWalletId,
     });
   } catch (e) {

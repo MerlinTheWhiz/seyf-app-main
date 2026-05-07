@@ -57,10 +57,15 @@ export function mapEtherfuseHttpError(
 
   // 4xx (excluding 429, handled above) — client error, not retryable
   if (status >= 400 && status <= 499) {
+    const low = providerMessage.toLowerCase();
+    const messageEs = low.includes("proxy account")
+      ? "Etherfuse no localizó la cuenta proxy Stellar de tu wallet. Ve a /anadir y activa la cuenta CLABE, asegúrate de que el KYC esté listo y que en Etherfuse la wallet y la cuenta bancaria estén activas; luego reintenta el bono."
+      : undefined;
     return new AppError("provider_rejected", {
       statusCode: 400,
       retryable: false,
       message: providerMessage,
+      ...(messageEs ? { messageEs } : {}),
     });
   }
 
