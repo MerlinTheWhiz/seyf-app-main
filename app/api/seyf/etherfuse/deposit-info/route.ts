@@ -22,15 +22,27 @@ type BankAccountsList = { items?: BankAccountRow[] }
 async function fetchBankAccountDepositClabe(
   customerId: string,
   bankAccountId: string,
-): Promise<{ etherfuseDepositClabe: string | null; status: string | null }> {
+): Promise<{
+  etherfuseDepositClabe: string | null
+  status: string | null
+  abbrClabe: string | null
+  bankAccountLabel: string | null
+}> {
   const pickFromItems = (
     items: BankAccountRow[],
-  ): { etherfuseDepositClabe: string | null; status: string | null } => {
+  ): {
+    etherfuseDepositClabe: string | null
+    status: string | null
+    abbrClabe: string | null
+    bankAccountLabel: string | null
+  } => {
     const active = items.filter((b) => !b.deletedAt)
     const match = active.find((b) => b.bankAccountId === bankAccountId) ?? active[0]
     return {
       etherfuseDepositClabe: match?.etherfuseDepositClabe ?? null,
       status: match?.status ?? null,
+      abbrClabe: typeof match?.abbrClabe === 'string' ? match.abbrClabe : null,
+      bankAccountLabel: typeof match?.label === 'string' ? match.label : null,
     }
   }
 
@@ -61,7 +73,7 @@ async function fetchBankAccountDepositClabe(
     /* ignore */
   }
 
-  return { etherfuseDepositClabe: null, status: null }
+  return { etherfuseDepositClabe: null, status: null, abbrClabe: null, bankAccountLabel: null }
 }
 
 /**
@@ -71,6 +83,8 @@ async function fetchBankAccountDepositClabe(
  *  - kycStatus: estado del KYC del usuario
  *  - kycReady: true si KYC está en estado usable (compliant/proposed/approved)
  *  - etherfuseDepositClabe: CLABE para depósito SPEI en Etherfuse (puede ser null si aún no activada)
+ *  - abbrClabe: vista abreviada de la CLABE del cliente (si Etherfuse la envía)
+ *  - bankAccountLabel: etiqueta interna de la cuenta en Etherfuse (opcional)
  *  - bankAccountStatus: estado de la cuenta bancaria en Etherfuse
  *  - hasContext: si se pudo resolver la sesión
  */
@@ -98,12 +112,16 @@ export async function GET(request: Request) {
 
     let etherfuseDepositClabe: string | null = null
     let bankAccountStatus: string | null = null
+    let abbrClabe: string | null = null
+    let bankAccountLabel: string | null = null
 
     if (kycReady) {
       try {
         const ba = await fetchBankAccountDepositClabe(ctx.customerId, ctx.bankAccountId)
         etherfuseDepositClabe = ba.etherfuseDepositClabe
         bankAccountStatus = ba.status
+        abbrClabe = ba.abbrClabe
+        bankAccountLabel = ba.bankAccountLabel
       } catch {
         // No bloquear si falla — el usuario puede activar desde el botón
       }
@@ -117,6 +135,8 @@ export async function GET(request: Request) {
         kycStatus,
         kycReady,
         etherfuseDepositClabe,
+        abbrClabe,
+        bankAccountLabel,
         bankAccountStatus,
       },
       { headers: { 'Cache-Control': 'no-store' } },

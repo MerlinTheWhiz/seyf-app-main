@@ -13,6 +13,12 @@ import {
   isRecoverableRegisterWalletConflict,
   registerOrganizationWallet,
 } from "@/lib/etherfuse/wallets";
+import {
+  fetchOrderDetails,
+  fetchOrgOrdersAllPages,
+  findPendingOnrampOrderForAmount,
+  pickRampOrderTransactionDetails,
+} from "@/lib/etherfuse/orders-api";
 import { AppError } from "@/lib/seyf/api-error";
 import { upsertStoredAgreementsAccepted } from "@/lib/seyf/agreements-state-store";
 import { assertEtherfuseKycApproved } from "@/lib/seyf/etherfuse-kyc-guard";
@@ -52,6 +58,31 @@ export type SpeiDepositPrepareOk = {
 };
 
 export type SpeiDepositPrepareResult = SpeiDepositPrepareOk | SpeiDepositPrepareConflict;
+
+function orderLikeCreateResponseFromGetDetail(detail: unknown): unknown | null {
+  const d = pickRampOrderTransactionDetails(detail);
+  if (!d.orderId?.trim() || !d.depositClabe?.trim()) return null;
+  const fiat = d.amountInFiat?.trim() ?? "";
+  return {
+    onramp: {
+      orderId: d.orderId,
+      depositClabe: d.depositClabe,
+      ...(fiat ? { depositAmount: fiat } : {}),
+    },
+  };
+}
+
+function parseAmountMxn(sourceAmount: string): number {
+  return Number.parseFloat(String(sourceAmount).replace(/,/g, "").trim());
+}
+
+function isPendingOnrampOrderExistsMessage(msg: string): boolean {
+  const lm = msg.toLowerCase();
+  return (
+    lm.includes("pending onramp order already exists") ||
+    lm.includes("already exists for this bank account and amount")
+  );
+}
 
 /**
  * Cotización + orden onramp en el mismo proceso servidor (mismo customer, mismo quoteId).
@@ -136,13 +167,34 @@ export async function prepareSpeiDepositQuoteAndOrder(params: {
       order = await buildOrder();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.toLowerCase().includes("terms and conditions")) {
+      const lm = msg.toLowerCase();
+      if (lm.includes("terms and conditions")) {
         await ensureAgreementsForWallet({
           customerId: ctx.customerId,
           bankAccountId,
           publicKey: ctx.publicKey,
         });
         order = await buildOrder();
+      } else if (msg.includes("(409)") || isPendingOnrampOrderExistsMessage(msg)) {
+        const amountMxn = parseAmountMxn(sourceAmount);
+        if (!Number.isFinite(amountMxn)) throw e;
+        const orders = await fetchOrgOrdersAllPages();
+        const pendingId = findPendingOnrampOrderForAmount(
+          orders,
+          bankAccountId,
+          amountMxn,
+        );
+        if (pendingId) {
+          const detail = await fetchOrderDetails(pendingId);
+          const wrapped = orderLikeCreateResponseFromGetDetail(detail);
+          if (wrapped) {
+            order = wrapped;
+          } else {
+            throw e;
+          }
+        } else {
+          throw e;
+        }
       } else {
         throw e;
       }

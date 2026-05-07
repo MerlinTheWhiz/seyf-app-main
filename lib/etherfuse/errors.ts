@@ -76,7 +76,10 @@ export function mapEtherfuseHttpError(
             ? "Revisa en devnet que la cuenta bancaria y la CLABE estén activas y coincidan con /identidad."
             : low.includes("not eligible") || low.includes("not_eligible")
               ? "Tu perfil en Etherfuse aún no puede cotizar esta operación. Completa KYC y términos en devnet y vuelve a intentar."
-              : undefined;
+              : lm.includes("pending onramp order already exists") ||
+                  lm.includes("already exists for this bank account and amount")
+                ? "Ya tienes una orden de depósito pendiente con ese monto. Usa los mismos datos en Etherfuse o espera a que se procese; si acabas de intentar de nuevo, recarga la pantalla."
+                : undefined;
     return new AppError("provider_rejected", {
       statusCode: 400,
       retryable: false,
