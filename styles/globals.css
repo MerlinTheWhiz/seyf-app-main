@@ -123,3 +123,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Skeleton shimmer */
+:root {
+  --skeleton-base: rgba(15, 23, 42, 0.06);
+  --skeleton-highlight: rgba(15, 23, 42, 0.09);
+  --skeleton-static: rgba(15, 23, 42, 0.06);
+}
+.dark {
+  --skeleton-base: rgba(255, 255, 255, 0.06);
+  --skeleton-highlight: rgba(255, 255, 255, 0.10);
+  --skeleton-static: rgba(255, 255, 255, 0.04);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-highlight) 50%, var(--skeleton-base) 75%);
+  background-size: 400% 100%;
+  will-change: background-position;
+  -webkit-animation: skeleton-shimmer 1.2s linear infinite;
+  animation: skeleton-shimmer 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    -webkit-animation: none;
+    background: var(--skeleton-static);
+  }
+}

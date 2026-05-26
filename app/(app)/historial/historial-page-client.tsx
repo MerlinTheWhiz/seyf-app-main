@@ -16,6 +16,7 @@ import { POLL_FETCH_INIT, pollBustUrl } from '@/lib/seyf/poll-fetch'
 import type { UserMovement } from '@/lib/seyf/user-movements-types'
 import { formatMovementListSubtitle } from '@/lib/seyf/user-movements-types'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const filtros = ['Todas', 'Entradas', 'Salidas'] as const
 type Filtro = (typeof filtros)[number]
@@ -203,12 +204,18 @@ export default function HistorialPageClient() {
   if (walletLoading && !wallet) {
     return (
       <AppPageBody>
-        <div className="mb-8 h-10 w-48 animate-pulse rounded-lg bg-secondary" />
+        <Skeleton className="mb-5 h-5 w-20 rounded-full" />
+        <Skeleton className="mb-8 h-[9rem] rounded-[1.5rem]" />
+        <div className="mb-6 flex gap-2">
+          <Skeleton className="h-9 w-20 rounded-full" />
+          <Skeleton className="h-9 w-20 rounded-full" />
+          <Skeleton className="h-9 w-20 rounded-full" />
+        </div>
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton
               key={i}
-              className="h-[4.5rem] animate-pulse rounded-[1.25rem] border border-border bg-secondary/40"
+              className="h-[4.5rem] rounded-[1.25rem] border border-border"
             />
           ))}
         </div>
@@ -293,10 +300,7 @@ export default function HistorialPageClient() {
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-[4.5rem] animate-pulse rounded-[1.25rem] border border-border bg-secondary/40"
-            />
+            <Skeleton key={i} className="h-[4.5rem] rounded-[1.25rem] border border-border" />
           ))}
         </div>
       ) : filtered.length === 0 ? (

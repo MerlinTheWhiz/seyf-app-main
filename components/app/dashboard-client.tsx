@@ -25,6 +25,7 @@ import {
 import { formatMovementListSubtitle, type UserMovement } from '@/lib/seyf/user-movements-types'
 import { formatMXN, formatLoUltimoMonto } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { EtherfuseKycSnapshot } from '@/lib/etherfuse/kyc'
 import { isPublicStellarTestnet } from '@/lib/seyf/stellar-wallet-network'
 
@@ -424,9 +425,10 @@ export default function DashboardClient({
   if (loading && !wallet) {
     return (
       <AppPageBody className="space-y-6 pt-4">
-        <div className="h-[22rem] animate-pulse rounded-[1.75rem] border border-border bg-secondary/40" />
-        <div className="h-48 animate-pulse rounded-[1.5rem] border border-border bg-secondary/30" />
-        <div className="h-40 animate-pulse rounded-[1.5rem] border border-border bg-secondary/30" />
+        <Skeleton className="h-20 rounded-2xl border border-border" />
+        <Skeleton className="h-[22rem] rounded-[1.75rem] border border-border" />
+        <Skeleton className="h-48 rounded-[1.5rem] border border-border" />
+        <Skeleton className="h-40 rounded-[1.5rem] border border-border" />
       </AppPageBody>
     )
   }
