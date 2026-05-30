@@ -1,44 +1,46 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useTranslations } from 'next-intl'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
-  const t = useTranslations('auth.login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setTimeout(() => setLoading(false), 1500)
-  }
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => setLoading(false), 1500);
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-background px-6 py-12">
       {/* Header */}
       <div className="mb-12">
-        <h1 className="text-4xl font-black tracking-tight text-foreground">{t('title')}</h1>
+        <h1 className="text-4xl font-black tracking-tight text-foreground">
+          Seyf
+        </h1>
       </div>
 
       <div className="flex flex-1 flex-col justify-center">
         <div className="mb-10">
           <h2 className="text-4xl font-black tracking-tight text-foreground leading-none">
-            {t('heading')}<br />{t('headingLine2')}
+            Bienvenido
+            <br />
+            de vuelta.
           </h2>
           <p className="mt-4 text-base text-muted-foreground font-normal">
-            {t('subtitle')}
+            Inicia sesión para ver tu ahorro y rendimientos.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             type="email"
-            placeholder={t('emailPlaceholder')}
+            placeholder="Correo electrónico"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -46,7 +48,7 @@ export default function LoginPage() {
           />
           <Input
             type="password"
-            placeholder={t('passwordPlaceholder')}
+            placeholder="Contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -60,24 +62,30 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full h-14 rounded-full bg-foreground text-background font-bold text-base hover:bg-foreground/90 transition-all disabled:opacity-60"
             >
-              {loading ? t('submitLoading') : t('submit')}
+              {loading ? "Entrando..." : "Iniciar sesión"}
             </Button>
           </div>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link href="#" className="underline underline-offset-4 hover:text-foreground">
-            {t('forgotPassword')}
+          <Link
+            href="#"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Olvide mi contrasena
           </Link>
         </p>
       </div>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
-        {t('noAccount')}{' '}
-        <Link href="/registro" className="font-bold text-foreground hover:underline">
-          {t('createAccount')}
+        No tienes cuenta?{" "}
+        <Link
+          href="/registro"
+          className="font-bold text-foreground hover:underline"
+        >
+          Crear cuenta
         </Link>
       </p>
     </div>
-  )
+  );
 }
