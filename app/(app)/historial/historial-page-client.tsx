@@ -222,12 +222,18 @@ export default function HistorialPageClient() {
   if (walletLoading && !wallet) {
     return (
       <AppPageBody>
-        <div className="mb-8 h-10 w-48 animate-pulse rounded-lg bg-secondary" />
+        <Skeleton className="mb-5 h-5 w-20 rounded-full" />
+        <Skeleton className="mb-8 h-[9rem] rounded-[1.5rem]" />
+        <div className="mb-6 flex gap-2">
+          <Skeleton className="h-9 w-20 rounded-full" />
+          <Skeleton className="h-9 w-20 rounded-full" />
+          <Skeleton className="h-9 w-20 rounded-full" />
+        </div>
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton
               key={i}
-              className="h-[4.5rem] animate-pulse rounded-[1.25rem] border border-border bg-secondary/40"
+              className="h-[4.5rem] rounded-[1.25rem] border border-border"
             />
           ))}
         </div>
@@ -244,7 +250,7 @@ export default function HistorialPageClient() {
           <div className="pointer-events-none absolute -bottom-20 -left-14 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
           <div className="relative">
             <p className="inline-flex rounded-full border border-[#b8b8b5]/60 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5f7168] dark:border-white/20 dark:bg-white/15 dark:text-[#d2e9df]">
-              Estado de cuenta
+              {t('hero.badge')}
             </p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-[#41534b] dark:text-white">
               Historial
@@ -255,7 +261,7 @@ export default function HistorialPageClient() {
           </div>
         </section>
         <Button asChild className="h-11 rounded-full font-bold">
-          <Link href="/">Ir a conectar</Link>
+          <Link href="/">{t('hero.connectBtn')}</Link>
         </Button>
       </AppPageBody>
     );
@@ -269,13 +275,13 @@ export default function HistorialPageClient() {
         <div className="pointer-events-none absolute -bottom-20 -left-14 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
         <div className="relative">
           <p className="inline-flex rounded-full border border-[#b8b8b5]/60 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5f7168] dark:border-white/20 dark:bg-white/15 dark:text-[#d2e9df]">
-            Estado de cuenta
+            {t('hero.badge')}
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-[#41534b] dark:text-white">
             Historial
           </h1>
           <p className="mt-2 text-sm text-[#6f837a] dark:text-[#d2e9df]">
-            Pagos en cadena y movimientos por transferencia en un solo lugar.
+            {t('hero.subtitle')}
           </p>
         </div>
       </section>
@@ -308,7 +314,7 @@ export default function HistorialPageClient() {
             className="mt-2 rounded-full"
             onClick={() => void loadAll()}
           >
-            Reintentar
+            {t('retry')}
           </Button>
         </div>
       ) : null}
@@ -316,10 +322,7 @@ export default function HistorialPageClient() {
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-[4.5rem] animate-pulse rounded-[1.25rem] border border-border bg-secondary/40"
-            />
+            <Skeleton key={i} className="h-[4.5rem] rounded-[1.25rem] border border-border" />
           ))}
         </div>
       ) : filtered.length === 0 ? (

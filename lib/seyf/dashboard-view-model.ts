@@ -18,9 +18,16 @@ import {
 export type { DashboardViewModel } from "@/lib/seyf/dashboard-view-model-types";
 export { DASHBOARD_MOVEMENTS_PREVIEW_LIMIT } from "@/lib/seyf/dashboard-view-model-types";
 
+function envVar(name: string): string | undefined {
+  const p = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })
+    .process;
+  return p?.env?.[name];
+}
+
 function investAllowed(): boolean {
-  if (process.env.NODE_ENV !== "production") return true;
-  return process.env.SEYF_ALLOW_MOCK_INVEST === "true";
+  const nodeEnv = envVar("NODE_ENV");
+  if (nodeEnv !== "production") return true;
+  return envVar("SEYF_ALLOW_MOCK_INVEST") === "true";
 }
 
 function ledgerPrincipalMxn(runs: InvestmentRun[]): number {
@@ -32,8 +39,9 @@ function ledgerPrincipalMxn(runs: InvestmentRun[]): number {
 function oldestCompletedRun(runs: InvestmentRun[]): InvestmentRun | null {
   const done = runs.filter((r) => r.status === "completed");
   if (done.length === 0) return null;
-  return done.reduce((a, r) =>
-    new Date(r.createdAt) < new Date(a.createdAt) ? r : a,
+  return done.reduce(
+    (a, r) => (new Date(r.createdAt) < new Date(a.createdAt) ? r : a),
+    done[0],
   );
 }
 
@@ -85,12 +93,15 @@ export async function buildDashboardViewModel(options?: {
   ]);
 
   const ledgerPrincipal = ledgerPrincipalMxn(investRuns);
-  const principalMxn =
-    cetesSaldo.kind === "ok" ? cetesSaldo.principalMxn : ledgerPrincipal;
+  const cyclePrincipal = activeCycle?.principalMxn ?? 0;
+  let principalMxn: number;
+  if (cetesSaldo.kind === "ok") principalMxn = cetesSaldo.principalMxn;
+  else if (cyclePrincipal > 0) principalMxn = cyclePrincipal;
+  else principalMxn = ledgerPrincipal;
 
   const lastRate =
     investRuns[0]?.rateSnapshotAnnualPercent ?? MOCK_ANNUAL_RATE_PERCENT;
-  const tasaAnual = lastRate;
+  const tasaAnual = activeCycle?.referenceRateAnnualPercent ?? lastRate;
 
   const oldest = oldestCompletedRun(investRuns);
   const dias = oldest ? daysSince(oldest.createdAt) : 1;

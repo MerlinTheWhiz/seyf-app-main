@@ -503,9 +503,10 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
   if (loading && !wallet) {
     return (
       <AppPageBody className="space-y-6 pt-4">
-        <div className="h-[22rem] animate-pulse rounded-[1.75rem] border border-border bg-secondary/40" />
-        <div className="h-48 animate-pulse rounded-[1.5rem] border border-border bg-secondary/30" />
-        <div className="h-40 animate-pulse rounded-[1.5rem] border border-border bg-secondary/30" />
+        <Skeleton className="h-20 rounded-2xl border border-border" />
+        <Skeleton className="h-[22rem] rounded-[1.75rem] border border-border" />
+        <Skeleton className="h-48 rounded-[1.5rem] border border-border" />
+        <Skeleton className="h-40 rounded-[1.5rem] border border-border" />
       </AppPageBody>
     );
   }
@@ -514,9 +515,9 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
     return (
       <AppPageBody className="space-y-4 pt-4">
         <div className="rounded-[1.5rem] border border-border bg-card px-5 py-8 text-center">
-          <p className="text-sm font-bold text-foreground">Conecta tu wallet</p>
+          <p className="text-sm font-bold text-foreground">{t('connectWallet')}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Para ver tu saldo y movimientos, inicia sesión en tu cuenta.
+            {t('connectWalletBody')}
           </p>
           <Button
             asChild
@@ -588,7 +589,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
       {error && (
         <section className="flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3">
           <p className="text-xs font-medium text-amber-200">
-            No pudimos cargar tu información. Intenta de nuevo.
+            {t('loadError')}
           </p>
           <Button
             type="button"
@@ -596,7 +597,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
             className="ml-3 h-8 shrink-0 rounded-full border-amber-500/30 bg-transparent px-3 text-xs font-semibold text-amber-300 hover:bg-amber-500/10"
             onClick={() => void mutate()}
           >
-            Reintentar
+            {t('retry')}
           </Button>
         </section>
       )}
@@ -622,7 +623,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
         {hideBalances ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center rounded-[1.75rem] bg-background/35 backdrop-blur-[2px]">
             <span className="rounded-full border border-border bg-card/90 px-3 py-1 text-xs font-bold text-foreground">
-              Saldos ocultos
+              {t('balancesHidden')}
             </span>
           </div>
         ) : null}
@@ -707,7 +708,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
           <div className="relative flex items-stretch gap-3">
             <div className="min-w-0 flex-1">
               <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#d8efe5]">
-                Testnet
+                {t('bonus.badge')}
               </p>
               <p className="mt-3 text-xl font-black leading-tight tracking-tight text-white">
                 Bono bienvenida
@@ -763,7 +764,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
             <X className="size-4" />
           </button>
           <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#d8efe5]">
-            Refiere y gana
+            {t('referral.badge')}
           </p>
           <p className="mt-3 text-xl font-black leading-tight tracking-tight">
             Refiere a un amigo y recibe
@@ -780,7 +781,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
               className="h-10 rounded-full bg-white px-4 text-sm font-bold text-[#184e46] hover:bg-white/90"
             >
               <a href={whatsappInviteHref} target="_blank" rel="noreferrer">
-                Compartir por WhatsApp
+                {t('referral.cta')}
               </a>
             </Button>
           </div>
@@ -789,7 +790,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
 
       <section className="overflow-hidden rounded-[1.5rem] border border-border bg-card">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-bold text-foreground">Lo último</h2>
+          <h2 className="text-sm font-bold text-foreground">{t('loUltimo')}</h2>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             Últimos {DASHBOARD_MOVEMENTS_PREVIEW_LIMIT} movimientos de tu cuenta
             · toca para ver detalle
@@ -854,7 +855,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
             href="/historial"
             className="flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-secondary hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Ver historial
+            {t('viewHistory')}
           </Link>
         </div>
       </section>
@@ -875,7 +876,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                     Tu resumen de saldos en tiempo real
                   </p>
                   <p className="text-[11px] text-muted-foreground dark:text-[#d2e9df]">
-                    Principal, rendimiento y liquidez disponible
+                    {t('balanceSummarySubtitle')}
                   </p>
                 </div>
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 ring-1 ring-[#cad9d1] dark:bg-white/15 dark:ring-white/20">
@@ -892,7 +893,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                     />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground dark:text-[#cde5db]">
-                    Principal
+                    {t('principal')}
                   </p>
                   <p className="mt-1 text-base font-black tabular-nums text-foreground dark:text-white">
                     {hideBalances ? (
@@ -915,7 +916,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                     />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground dark:text-[#cde5db]">
-                    Rendimiento
+                    {t('rendimiento')}
                   </p>
                   <p className="mt-1 text-base font-black tabular-nums text-foreground dark:text-white">
                     {hideBalances ? (
@@ -949,7 +950,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                       : "Aún no tienes adelanto habilitado"}
                   </p>
                   <p className="text-[11px] text-muted-foreground dark:text-[#d2e9df]">
-                    Liquidez inmediata sin tocar tu capital principal
+                    {t('adelantoSubtitle')}
                   </p>
                 </div>
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 ring-1 ring-[#cad9d1] dark:bg-white/15 dark:ring-white/20">
@@ -960,7 +961,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
               <div className="relative overflow-hidden rounded-2xl border border-[#c0d6ca] bg-gradient-to-br from-[#dcebe4] via-[#d3e5dc] to-[#c8ddd3] p-4 ring-1 ring-[#b9d1c4]/70 dark:border-[#2b4a43] dark:from-[#10413a] dark:via-[#15534a] dark:to-[#1b6155] dark:ring-[#2b4a43]/80">
                 <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-[#8ab9a3]/25 blur-2xl dark:bg-[#4d8c77]/30" />
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#4d6a5f] dark:text-[#d2e9df]">
-                  Monto adelantable
+                  {t('adelantableLabel')}
                 </p>
                 <p className="mt-1 text-3xl font-black tracking-tight text-foreground dark:text-white">
                   {hideBalances ? (
@@ -992,7 +993,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                     />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground dark:text-[#d9e7e1]">
-                    Rendimiento
+                    {t('rendimiento')}
                   </p>
                   <p className="mt-1 text-base font-black tabular-nums text-foreground dark:text-white">
                     {hideBalances ? (
@@ -1017,7 +1018,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                     />
                   </div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground dark:text-[#d9e7e1]">
-                    Estado
+                    {t('adelantoStatus')}
                   </p>
                   <p className="mt-1 text-sm font-black text-foreground dark:text-white">
                     {effectiveAdelantableMxn > 0
