@@ -261,29 +261,50 @@ export function WithdrawSpeiDestination({
 
             <div className="rounded-xl border border-dashed border-border bg-background/40 p-3 space-y-3">
               <p className="text-xs font-bold text-foreground">Registrar contacto</p>
-              <Input
-                placeholder="Alias (ej. Mi cuenta BBVA)"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-                className="rounded-xl"
-                disabled={disabled}
-              />
-              <Input
-                placeholder="Titular de la cuenta (opcional)"
-                value={newBeneficiary}
-                onChange={(e) => setNewBeneficiary(e.target.value)}
-                className="rounded-xl"
-                disabled={disabled}
-              />
-              <Input
-                inputMode="numeric"
-                placeholder="CLABE (18 dígitos)"
-                value={newClabe}
-                onChange={(e) => setNewClabe(normalizeClabeDigits(e.target.value))}
-                maxLength={18}
-                className="rounded-xl font-mono tabular-nums"
-                disabled={disabled}
-              />
+              
+              <div className="space-y-1">
+                <Label htmlFor="contact-alias" className="text-xs font-semibold text-muted-foreground">
+                  Alias del contacto
+                </Label>
+                <Input
+                  id="contact-alias"
+                  placeholder="Alias (ej. Mi cuenta BBVA)"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  className="rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="contact-beneficiary" className="text-xs font-semibold text-muted-foreground">
+                  Titular de la cuenta (opcional)
+                </Label>
+                <Input
+                  id="contact-beneficiary"
+                  placeholder="Titular de la cuenta (opcional)"
+                  value={newBeneficiary}
+                  onChange={(e) => setNewBeneficiary(e.target.value)}
+                  className="rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="contact-clabe" className="text-xs font-semibold text-muted-foreground">
+                  CLABE (18 dígitos)
+                </Label>
+                <Input
+                  id="contact-clabe"
+                  inputMode="numeric"
+                  placeholder="CLABE (18 dígitos)"
+                  value={newClabe}
+                  onChange={(e) => setNewClabe(normalizeClabeDigits(e.target.value))}
+                  maxLength={18}
+                  className="rounded-xl font-mono tabular-nums focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  disabled={disabled}
+                />
+              </div>
               {formErr ? (
                 <p className="text-xs text-destructive">{formErr}</p>
               ) : null}
