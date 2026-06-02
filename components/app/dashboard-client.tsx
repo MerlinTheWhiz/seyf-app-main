@@ -21,6 +21,9 @@ import { MovementDetailSheet } from "@/components/app/movement-detail-sheet";
 import { YieldTrendChart } from "@/components/app/yield-trend-chart";
 import { iconForMovimientoTipo } from "@/components/app/movement-tipo-icons";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useTranslations } from "next-intl";
 import { balanceForAssetCode } from "@/lib/seyf/accesly-balances";
 import { cetesBalanceEquivMxne } from "@/lib/seyf/cetes-mxne-equiv";
 import { cetesStablebondDisplayFromRow } from "@/lib/seyf/stablebond-cetes-display";
@@ -112,6 +115,7 @@ const advanceSimFetcher = (
   });
 
 export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
+  const t = useTranslations("dashboard");
   const { wallet, assetBalances, loading, refreshBalance } = useSeyfWallet();
   const [selected, setSelected] = useState<UserMovement | null>(null);
   const [hideBalances, setHideBalances] = useState(false);
@@ -1030,7 +1034,7 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
         </div>
       </section>
 
-      {activeCycle && (
+      {activeCycle ? (
         <section className="relative overflow-hidden rounded-[1.6rem] border border-[#c0d6ca] bg-gradient-to-br from-[#e4efe9] via-[#d9e9e1] to-[#cde1d7] p-5 shadow-[0_16px_45px_rgba(35,94,77,0.16)] dark:border-[#2b4a43] dark:from-[#0f3b36] dark:via-[#15534a] dark:to-[#1b5b50] dark:shadow-[0_16px_45px_rgba(20,83,74,0.35)]">
           <div className="pointer-events-none absolute -right-14 -top-20 h-44 w-44 rounded-full bg-[#8ab9a3]/30 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-[#9bc4b2]/25 blur-3xl" />
@@ -1083,6 +1087,19 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
               Simula monto, tasa y plazo en el siguiente paso.
             </p>
           </div>
+        </section>
+      ) : (
+        <section className="relative overflow-hidden rounded-[1.6rem] border border-border bg-card p-5">
+          <EmptyState
+            variant="compact"
+            illustration="cycle"
+            title="Tu capital está listo para empezar a trabajar"
+            description="Abre tu primer ciclo de rendimiento en pesos invirtiendo en CETES de manera segura."
+            primaryAction={{
+              label: "Agregar fondos",
+              href: "/anadir",
+            }}
+          />
         </section>
       )}
 
