@@ -81,13 +81,13 @@ function EmptyState({
   onCrear,
   creating,
   error,
-  t,
 }: {
   onCrear: () => void;
   creating: boolean;
   error: string | null;
   t: any;
 }) {
+  const t = useTranslations('components.clabeCard');
   return (
     <div className="flex flex-col items-center gap-5 px-2 py-4 text-center">
       <div className="flex size-14 items-center justify-center rounded-full bg-secondary/80 ring-1 ring-border">

@@ -10,6 +10,9 @@ import { AppPageBody } from "@/components/app/app-page-body";
 import { MovementDetailSheet } from "@/components/app/movement-detail-sheet";
 import { iconForMovimientoTipo } from "@/components/app/movement-tipo-icons";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslations } from "next-intl";
 import {
   HISTORIAL_POLL_EXTRA_DELAYS_MS,
   HISTORIAL_POLL_MS,
@@ -253,7 +256,7 @@ export default function HistorialPageClient() {
           <div className="pointer-events-none absolute -bottom-20 -left-14 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
           <div className="relative">
             <p className="inline-flex rounded-full border border-[#b8b8b5]/60 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5f7168] dark:border-white/20 dark:bg-white/15 dark:text-[#d2e9df]">
-              {t('hero.badge')}
+              {t('stateBadge')}
             </p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-[#41534b] dark:text-white">
               Historial
@@ -264,7 +267,7 @@ export default function HistorialPageClient() {
           </div>
         </section>
         <Button asChild className="h-11 rounded-full font-bold">
-          <Link href="/">{t('hero.connectBtn')}</Link>
+          <Link href="/">{t('connectAction')}</Link>
         </Button>
       </AppPageBody>
     );
@@ -278,13 +281,13 @@ export default function HistorialPageClient() {
         <div className="pointer-events-none absolute -bottom-20 -left-14 h-44 w-44 rounded-full bg-[#b8b8b5]/20 blur-3xl dark:bg-[#22433c]/40" />
         <div className="relative">
           <p className="inline-flex rounded-full border border-[#b8b8b5]/60 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#5f7168] dark:border-white/20 dark:bg-white/15 dark:text-[#d2e9df]">
-            {t('hero.badge')}
+            {t('stateBadge')}
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-[#41534b] dark:text-white">
             Historial
           </h1>
           <p className="mt-2 text-sm text-[#6f837a] dark:text-[#d2e9df]">
-            {t('hero.subtitle')}
+            {t('body')}
           </p>
         </div>
       </section>
@@ -329,15 +332,20 @@ export default function HistorialPageClient() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-border bg-card py-20 text-center">
-          <p className="mb-2 text-lg font-black text-foreground">
-            Sin movimientos
-          </p>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            No hay operaciones que coincidan, o aún no hay actividad en Stellar
-            / Etherfuse con esta cuenta.
-          </p>
-        </div>
+        <EmptyState
+          variant="full"
+          illustration="history"
+          title="Sin movimientos aún"
+          description="Aquí aparecerán tus depósitos, rendimientos y retiros una vez que comiences a operar."
+          primaryAction={{
+            label: "Agregar fondos",
+            href: "/anadir",
+          }}
+          secondaryAction={{
+            label: "Volver al inicio",
+            href: "/dashboard",
+          }}
+        />
       ) : (
         <div className="space-y-2">
           {filtered.map((mov) => {

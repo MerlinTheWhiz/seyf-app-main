@@ -8,6 +8,8 @@ import { AppPageBody } from '@/components/app/app-page-body'
 import { AppBackLink } from '@/components/app/app-back-link'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Label } from '@/components/ui/label'
 import { mxnToSpanishWords } from '@/lib/formatters'
 
@@ -169,6 +171,32 @@ export default function AdelantoPage() {
     return (
       <AppPageBody className="flex items-center justify-center pt-20">
         <p className="text-muted-foreground animate-pulse font-medium">Generando simulación...</p>
+      </AppPageBody>
+    )
+  }
+
+  const alreadyUsedAdvance = useMemo(() => {
+    return simulation?.error === 'advance_already_used' || advances.some(a => (a as any).status === 'completed')
+  }, [simulation?.error, advances])
+
+  if (alreadyUsedAdvance) {
+    return (
+      <AppPageBody className="space-y-6 pt-2">
+        <AppBackLink href="/dashboard" />
+        <EmptyState
+          variant="full"
+          illustration="balance"
+          title="Ya utilizaste tu adelanto de este ciclo"
+          description="Tu liquidez está activa y trabajando. Podrás solicitar uno nuevo en tu siguiente ciclo."
+          primaryAction={{
+            label: "Volver al inicio",
+            onClick: () => router.push('/dashboard'),
+          }}
+          secondaryAction={{
+            label: "Ver tus adelantos",
+            onClick: () => router.push('/adelantos'),
+          }}
+        />
       </AppPageBody>
     )
   }

@@ -100,7 +100,9 @@ export default async function RootLayout({
       <body className="min-h-dvh font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <PublicMobileHistorySeed />
-          <PollarProviderClient>{children}</PollarProviderClient>
+          <NextIntlClientProvider messages={messages}>
+            <PollarProviderClient>{children}</PollarProviderClient>
+          </NextIntlClientProvider>
         </ThemeProvider>
         <InstallPrompt />
         <ServiceWorkerRegistration />

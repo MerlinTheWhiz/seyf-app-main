@@ -148,7 +148,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[webhook etherfuse] POST handler crashed", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("[webhook etherfuse] Critical webhook error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
