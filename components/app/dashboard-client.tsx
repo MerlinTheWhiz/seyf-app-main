@@ -1171,10 +1171,10 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
                 </div>
               ))}
             </div>
-            {effectiveAdelantableMxn > 0 ? (
+            {effectiveAdelantableMxn > 0 || effectiveAdvanceUsed ? (
               <Link href="/adelanto" className="mt-4 block">
                 <Button className="h-12 w-full rounded-full text-base font-black">
-                  Pedir adelanto
+                  {effectiveAdvanceUsed ? 'Ver mi adelanto' : 'Pedir adelanto'}
                 </Button>
               </Link>
             ) : (
