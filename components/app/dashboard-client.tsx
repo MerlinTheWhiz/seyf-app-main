@@ -23,9 +23,7 @@ import { MovementDetailSheet } from "@/components/app/movement-detail-sheet";
 import { YieldTrendChart } from "@/components/app/yield-trend-chart";
 import { iconForMovimientoTipo } from "@/components/app/movement-tipo-icons";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useTranslations } from "next-intl";
 import { balanceForAssetCode } from "@/lib/seyf/accesly-balances";
 import { cetesBalanceEquivMxne } from "@/lib/seyf/cetes-mxne-equiv";
 import { cetesStablebondDisplayFromRow } from "@/lib/seyf/stablebond-cetes-display";
@@ -513,25 +511,6 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
         <Skeleton className="h-[22rem] rounded-[1.75rem] border border-border" />
         <Skeleton className="h-48 rounded-[1.5rem] border border-border" />
         <Skeleton className="h-40 rounded-[1.5rem] border border-border" />
-      </AppPageBody>
-    );
-  }
-
-  if (!wallet) {
-    return (
-      <AppPageBody className="space-y-4 pt-4">
-        <div className="rounded-[1.5rem] border border-border bg-card px-5 py-8 text-center">
-          <p className="text-sm font-bold text-foreground">{t('connectWallet')}</p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t('connectWalletBody')}
-          </p>
-          <Button
-            asChild
-            className="mt-6 h-11 w-full max-w-xs rounded-full font-bold"
-          >
-            <Link href="/">Ir a conectar</Link>
-          </Button>
-        </div>
       </AppPageBody>
     );
   }
@@ -1135,12 +1114,12 @@ export default function DashboardClient({ vm }: { vm: DashboardViewModel }) {
         <section className="relative overflow-hidden rounded-[1.6rem] border border-border bg-card p-5">
           <EmptyState
             variant="compact"
-            illustration="cycle"
-            title="Tu capital está listo para empezar a trabajar"
-            description="Abre tu primer ciclo de rendimiento en pesos invirtiendo en CETES de manera segura."
+            illustration="balance"
+            title={t('emptyStateTitle')}
+            description={t('emptyStateBody')}
             primaryAction={{
-              label: "Agregar fondos",
-              href: "/anadir",
+              label: t('emptyStateCta'),
+              href: "/depositar",
             }}
           />
         </section>
